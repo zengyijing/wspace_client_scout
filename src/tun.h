@@ -45,6 +45,10 @@ public:
 	{
 		if_name_[0] = '\0';
 		server_ip_eth_[0] = '\0';
+
+		//modified by Zeng
+		client_ip_tun_[0] = '\0';
+		//end modification
 	}
 
 	~Tun()
@@ -87,6 +91,11 @@ public:
 	int tun_type_;    		// TUN or TAP
 	char if_name_[IFNAMSIZ];
 	char server_ip_eth_[16];  // Have to contact the server to inform the client's address
+
+	//modified by Zeng
+	char client_ip_tun_[16];
+	//end modification
+
 	struct sockaddr_in server_addr_eth_, client_addr_eth_, client_addr_ath_; 
 	uint16_t port_eth_, port_ath_, port_relay_;
 	int sock_fd_eth_, sock_fd_ath_;    	 // Sockets to handle request at the server side

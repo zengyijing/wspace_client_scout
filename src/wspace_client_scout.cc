@@ -8,7 +8,7 @@ using namespace std;
 int main(int argc, char **argv)
 {
 	printf("PKT_SIZE: %d\n", PKT_SIZE);
-	const char* args = "T:B:i:S:s:C:A:p:n:hd:";
+	const char* args = "T:B:i:I:S:s:C:A:p:n:hd:";
 	wspace_client = new WspaceClient(argc, argv, args);
 	wspace_client->tun_.CreateConn();
 	
@@ -56,6 +56,12 @@ WspaceClient::WspaceClient(int argc, char *argv[], const char *optstring)
 				strncpy(tun_.if_name_, optarg, IFNAMSIZ-1);
 				tun_.tun_type_ = IFF_TUN;
 				break;
+			//modified by Zeng
+			case 'I':
+				strncpy(tun_.client_ip_tun_,optarg,16);
+				printf("client_ip_tun_: %s\n", tun_.client_ip_tun_);
+				break;
+			//end modification
 			case 'C':
 				strncpy(tun_.server_ip_eth_,optarg,16);
 				printf("server_ip_eth: %s\n", tun_.server_ip_eth_);
@@ -81,7 +87,9 @@ WspaceClient::WspaceClient(int argc, char *argv[], const char *optstring)
 				Perror("Usage: %s -i tun0/tap0 -S server_eth_ip -s server_ath_ip -C client_eth_ip\n",argv[0]);
 		}
 	}
-	assert(tun_.if_name_[0] && tun_.server_ip_eth_[0]);
+	//modified by Zeng
+	assert(tun_.if_name_[0] && tun_.server_ip_eth_[0] && tun_.client_ip_tun_[0]);
+	//end modification
 }
 
 template<class T>

@@ -106,8 +106,11 @@ void Tun::CreateConn()
 
 void Tun::InformServerAddr(int sock_fd, const sockaddr_in *server_addr)
 {
-	char buffer[PKT_SIZE];
+	//modified by Zeng
+	char buffer[PKT_SIZE] = {0};
 	snprintf(buffer, PKT_SIZE, "connect\0");
+	strcpy(buffer + strlen(buffer), client_ip_tun_);
+	//end modification
 	if (sendto(sock_fd, buffer, strlen(buffer)+1, 0, (struct sockaddr*)server_addr, sizeof(sockaddr_in)) == -1) 
 		perror("InformServerAddr: UDP sendto fails!");
 	if (recvfrom(sock_fd, buffer, PKT_SIZE, 0, NULL, NULL) == -1) 
