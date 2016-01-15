@@ -56,12 +56,11 @@ WspaceClient::WspaceClient(int argc, char *argv[], const char *optstring)
 				strncpy(tun_.if_name_, optarg, IFNAMSIZ-1);
 				tun_.tun_type_ = IFF_TUN;
 				break;
-			//modified by Zeng
+			// @yijing: Again, get the client id and store it as a data member of WspaceClient.
 			case 'I':
 				strncpy(tun_.client_ip_tun_,optarg,16);
 				printf("client_ip_tun_: %s\n", tun_.client_ip_tun_);
 				break;
-			//end modification
 			case 'C':
 				strncpy(tun_.server_ip_eth_,optarg,16);
 				printf("server_ip_eth: %s\n", tun_.server_ip_eth_);
@@ -87,9 +86,7 @@ WspaceClient::WspaceClient(int argc, char *argv[], const char *optstring)
 				Perror("Usage: %s -i tun0/tap0 -S server_eth_ip -s server_ath_ip -C client_eth_ip\n",argv[0]);
 		}
 	}
-	//modified by Zeng
 	assert(tun_.if_name_[0] && tun_.server_ip_eth_[0] && tun_.client_ip_tun_[0]);
-	//end modification
 }
 
 template<class T>
