@@ -29,78 +29,70 @@
 #define PORT_ATH 55555
 #define PORT_RELAY 55556
 
-class Tun
-{
-public:
-	enum IOType
-	{
-		kTun=1,
-		kFrontWspace,
-		kBackWspace, 
-		kCellular, 
-	};
+class Tun {
+ public:
+  enum IOType {
+    kTun=1,
+    kFrontWspace,
+    kBackWspace, 
+    kCellular, 
+  };
 
-	Tun(): tun_type_(IFF_TUN), port_eth_(PORT_ETH), 
-				 port_ath_(PORT_ATH), port_relay_(PORT_RELAY) 
-	{
-		if_name_[0] = '\0';
-		server_ip_eth_[0] = '\0';
+  Tun(): tun_type_(IFF_TUN), port_eth_(PORT_ETH), 
+         port_ath_(PORT_ATH), port_relay_(PORT_RELAY)  {
+    if_name_[0] = '\0';
+    server_ip_eth_[0] = '\0';
 
-		//modified by Zeng
-		client_ip_tun_[0] = '\0';
-		//end modification
-	}
+    client_id_ = 0;
+  }
 
-	~Tun()
-	{
-		close(tun_fd_);
-	 	close(sock_fd_eth_);
-		close(sock_fd_ath_);
-	}
-	
-	void CreateConn();
+  ~Tun() {
+    close(tun_fd_);
+     close(sock_fd_eth_);
+    close(sock_fd_ath_);
+  }
+  
+  void CreateConn();
 
-	void InitSock();
+  void InitSock();
 
-	void InformServerAddr(int sock_fd, const sockaddr_in *server_addr);
+  void InformServerAddr(int sock_fd, const sockaddr_in *server_addr);
 
-	int AllocTun(char *dev, int flags);
+  int AllocTun(char *dev, int flags);
 
-	int CreateSock();
+  int CreateSock();
 
-	void CreateAddr(const char *ip, int port, sockaddr_in *addr);
-	void CreateAddr(int port, sockaddr_in *addr);
+  void CreateAddr(const char *ip, int port, sockaddr_in *addr);
+  void CreateAddr(int port, sockaddr_in *addr);
 
-	void BindSocket(int fd, sockaddr_in *addr);
+  void BindSocket(int fd, sockaddr_in *addr);
 
-	void BuildFDMap();
+  void BuildFDMap();
 
-	int GetFD(const IOType &type);
-	
-	uint16_t Read(const IOType &type, char *buf, uint16_t len);
+  int GetFD(const IOType &type);
+  
+  uint16_t Read(const IOType &type, char *buf, uint16_t len);
 
-	/**
-	 * Read from multiple interfaces.
-	 */
-	uint16_t Read(const std::vector<IOType> &type_arr, char *buf, uint16_t len, IOType *type_out);
+  /**
+   * Read from multiple interfaces.
+   */
+  uint16_t Read(const std::vector<IOType> &type_arr, char *buf, uint16_t len, IOType *type_out);
 
-	uint16_t Write(const IOType &type, char *buf, uint16_t len);
+  uint16_t Write(const IOType &type, char *buf, uint16_t len);
 
 // Data members:
-	int tun_fd_;
-	int tun_type_;    		// TUN or TAP
-	char if_name_[IFNAMSIZ];
-	char server_ip_eth_[16];  // Have to contact the server to inform the client's address
+  int tun_fd_;
+  int tun_type_;        // TUN or TAP
+  char if_name_[IFNAMSIZ];
+  char server_ip_eth_[16];  // Have to contact the server to inform the client's address
 
-	//modified by Zeng
-	char client_ip_tun_[16];
-	//end modification
+  int client_id_;
 
-	struct sockaddr_in server_addr_eth_, client_addr_eth_, client_addr_ath_; 
-	uint16_t port_eth_, port_ath_, port_relay_;
-	int sock_fd_eth_, sock_fd_ath_;    	 // Sockets to handle request at the server side
-	UdpSocket relay_sock_;
-	std::map<IOType, int> fd_map_;
+  struct sockaddr_in server_addr_eth_, client_addr_eth_, client_addr_ath_; 
+  uint16_t port_eth_, port_ath_, port_relay_;
+  int sock_fd_eth_, sock_fd_ath_;       // Sockets to handle request at the server side
+  UdpSocket relay_sock_;
+  std::map<IOType, int> fd_map_;
 };
 
 int cread(int fd, char *buf, int n);
