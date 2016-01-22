@@ -12,59 +12,57 @@
 
 #define MAX_READ 2000
 
-struct Location
-{
-	double latitude;
-	double longitude;
+struct Location {
+  double latitude;
+  double longitude;
 };
 
 using namespace std;
 
-class GPSParser
-{
-public:
-	GPSParser();
-	~GPSParser();
-	
-	/** 
-	 * @return true - if speed reading is available.
-	 */
-	bool GetGPSReadings();
+class GPSParser {
+ public:
+  GPSParser();
+  ~GPSParser();
+  
+  /** 
+   * @return true - if speed reading is available.
+   */
+  bool GetGPSReadings();
 
-	double time() const { return time_; }
+  double time() const { return time_; }
 
-	double speed() const { return speed_; }
+  double speed() const { return speed_; }
 
-	bool is_fixed_speed() const { return is_fixed_speed_; }
+  bool is_fixed_speed() const { return is_fixed_speed_; }
 
-	void ConfigSpeed(bool is_fixed_speed, double speed = -1.0);
+  void ConfigSpeed(bool is_fixed_speed, double speed = -1.0);
 
-	const Location& location() const { return location_; }
+  const Location& location() const { return location_; }
 
-	void Print();
+  void Print();
 
-private:
-	void WaitReadingsAvailable();
+ private:
+  void WaitReadingsAvailable();
 
-	bool ParseLine(const string &line);
+  bool ParseLine(const string &line);
 
-	void SplitLine(const string &line, const string &separator=" ,\t");
+  void SplitLine(const string &line, const string &separator=" ,\t");
 
-	bool IsValidLine();
+  bool IsValidLine();
 
-	bool GetValue(const string &phrase, const string &key, double *val);
+  bool GetValue(const string &phrase, const string &key, double *val);
 
-	void ConfigGPSPipe();
+  void ConfigGPSPipe();
 
-	const string kStartPhrase;
-	const string kGPSCMD;
-	double time_;
-	Location location_;
-	double speed_;
-	bool is_fixed_speed_;
-	FILE *fp_;
-	int fd_;  /** Need for the non-blocking socket. */
-	vector<string> phrases_;
+  const string kStartPhrase;
+  const string kGPSCMD;
+  double time_;
+  Location location_;
+  double speed_;
+  bool is_fixed_speed_;
+  FILE *fp_;
+  int fd_;  /** Need for the non-blocking socket. */
+  vector<string> phrases_;
 };
 
 #endif
