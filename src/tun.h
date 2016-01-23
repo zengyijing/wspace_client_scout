@@ -41,14 +41,14 @@ class Tun {
   Tun(): tun_type_(IFF_TUN), port_eth_(PORT_ETH), 
          port_ath_(PORT_ATH), port_relay_(PORT_RELAY)  {
     if_name_[0] = '\0';
-    server_ip_eth_[0] = '\0';
-
+    controller_ip_eth_[0] = '\0';
     client_id_ = 0;
+    server_id_ = 0;
   }
 
   ~Tun() {
     close(tun_fd_);
-     close(sock_fd_eth_);
+    close(sock_fd_eth_);
     close(sock_fd_ath_);
   }
   
@@ -84,11 +84,12 @@ class Tun {
   int tun_fd_;
   int tun_type_;        // TUN or TAP
   char if_name_[IFNAMSIZ];
-  char server_ip_eth_[16];  // Have to contact the server to inform the client's address
-
+  char controller_ip_eth_[16];
   int client_id_;
-
-  struct sockaddr_in server_addr_eth_, client_addr_eth_, client_addr_ath_; 
+  int server_id_;
+  std::map<int, string> bs_ip_tbl_; // <bs_id, bs_ip_eth_>.
+  std::map<int, struct sockaddr_in> bs_addr_tbl_; // <bs_id, bs_addr>.
+  struct sockaddr_in client_addr_eth_, client_addr_ath_, controller_addr_eth_; 
   uint16_t port_eth_, port_ath_, port_relay_;
   int sock_fd_eth_, sock_fd_ath_;       // Sockets to handle request at the server side
   UdpSocket relay_sock_;

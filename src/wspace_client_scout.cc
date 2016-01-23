@@ -54,11 +54,11 @@ WspaceClient::WspaceClient(int argc, char *argv[], const char *optstring)
         break;
       case 'I':
         tun_.client_id_ = atoi(optarg);
-        printf("client_id: %s\n", tun_.client_id_);
+        printf("client_id: %d\n", tun_.client_id_);
         break;
       case 'C':
-        strncpy(tun_.server_ip_eth_,optarg,16);
-        printf("server_ip_eth: %s\n", tun_.server_ip_eth_);
+        strncpy(tun_.controller_ip_eth_,optarg,16);
+        printf("controller_ip_eth: %s\n", tun_.controller_ip_eth_);
         break;
       case 'A':
         max_ack_cnt_ = uint8(atoi(optarg));
@@ -76,12 +76,46 @@ WspaceClient::WspaceClient(int argc, char *argv[], const char *optstring)
         min_pkt_cnt_ = atoi(optarg);
         printf("min_pkt_cnt: %d\n", min_pkt_cnt_);
         assert(min_pkt_cnt_ > 0);
-        break; 
+        break;
+      case 's': {
+        string addr;
+        stringstream ss(optarg);
+        while(getline(ss, addr, ',')) {
+          if(atoi(addr.c_str()) == 1)
+              Perror("id 1 is reserved by controller\n");
+          bs_ids_.push_back(atoi(addr.c_str()));
+        }
+        break;
+      }
+      case 'S': {
+        ParseIP(bs_ids_, tun_.bs_ip_tbl_, tun_.bs_addr_tbl_);
+        break;
+      } 
       default:
         Perror("Usage: %s -i tun0/tap0 -S server_eth_ip -s server_ath_ip -C client_eth_ip\n",argv[0]);
     }
   }
-  assert(tun_.if_name_[0] && tun_.server_ip_eth_[0] && tun_.client_id_);
+  assert(tun_.if_name_[0] && tun_.controller_ip_eth_[0] && tun_.client_id_ && tun_.bs_ip_tbl_.size());
+  for (map<int, string>::iterator it = tun_.bs_ip_tbl_.begin(); it != tun_.bs_ip_tbl_.end(); ++it) {
+    assert(strlen(it->second.c_str()));
+  }
+}
+
+void WspaceClient::ParseIP(const vector<int> &ids, map<int, string> &ip_table, map<int, struct sockaddr_in> &addr_table) {
+  if (ids.empty()) {
+    Perror("WspaceClient::ParseIP: Need to indicate ids first!\n");
+  }
+  vector<int>::const_iterator it = ids.begin();
+  string addr;
+  stringstream ss(optarg);
+  while(getline(ss, addr, ',')) {
+    if (it == ids.end())
+      Perror("WspaceClient::ParseIP: Too many input addresses\n");
+    int id = *it;
+    ip_table[id] = addr;
+    tun_.CreateAddr(ip_table[id].c_str(), tun_.port_eth_, &addr_table[id]);
+    ++it;
+  }
 }
 
 template<class T>
@@ -223,7 +257,15 @@ void* WspaceClient::RxWriteTun(void* arg) {
   while (1) {
     bzero(pkt, PKT_SIZE);
     is_pkt_available = data_pkt_buf_.DequeuePkt(&len, (uint8*)pkt);
-    if (is_pkt_available) tun_.Write(Tun::kTun, pkt, len);
+    if (is_pkt_available) {
+      ControllerToClientHeader* hdr = (ControllerToClientHeader*)pkt;
+      if (hdr->type() == CONTROLLER_TO_CLIENT && hdr->client_id() == tun_.client_id_) {
+        if(tun_.bs_ip_tbl_.count(hdr->bs_id()) && hdr->bs_id() != tun_.server_id_) {
+          tun_.server_id_ = hdr->bs_id();
+        }
+        tun_.Write(Tun::kTun, pkt + sizeof(ControllerToClientHeader), len - sizeof(ControllerToClientHeader));
+      }
+    }
   }
   delete[] pkt;
   return (void*)NULL;
