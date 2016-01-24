@@ -78,7 +78,7 @@ void Tun::InitSock() {
   CreateAddr(port_eth_, &client_addr_eth_);   
   CreateAddr(port_ath_, &client_addr_ath_);   
   // Their address
-  CreateAddr(server_ip_eth_, port_eth_, &server_addr_eth_);
+  CreateAddr(controller_ip_eth_, port_eth_, &controller_addr_eth_);
 
   BindSocket(sock_fd_eth_, &client_addr_eth_);
   BindSocket(sock_fd_ath_, &client_addr_ath_);
@@ -156,15 +156,18 @@ uint16_t Tun::Read(const vector<IOType> &type_arr, char *buf, uint16_t len, IOTy
   return nread;
 }
 
-uint16_t Tun::Write(const IOType &type, char *buf, uint16_t len) {
+uint16_t Tun::Write(const IOType &type, char *buf, uint16_t len, int bs_id) {
   uint16_t nwrite=-1;
   assert(len > 0);
 
   if (type == kTun) {
     nwrite = cwrite(tun_fd_, buf, len);
   }
-  else if (type == kCellular) {  
-    nwrite = sendto(sock_fd_eth_, buf, len, 0, (struct sockaddr*)&server_addr_eth_, sizeof(server_addr_eth_));
+  else if (type == kCellular) {
+    nwrite = sendto(sock_fd_eth_, buf, len, 0, (struct sockaddr*)&bs_addr_tbl_[bs_id], sizeof(struct sockaddr_in));
+  }
+  else if (type == kController) {
+    nwrite = sendto(sock_fd_eth_, buf, len, 0, (struct sockaddr*)&controller_addr_eth_, sizeof(struct sockaddr_in));
   }
   else
     assert(0);
