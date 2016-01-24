@@ -69,7 +69,7 @@ class Tun {
 
   void BuildFDMap();
 
-  int GetFD(const IOType &type);
+  int GetFD(const IOType &type, int radio_id);
   
   uint16_t Read(const IOType &type, char *buf, uint16_t len, int *radio_id); // radio_id for Ath
 
@@ -90,12 +90,12 @@ class Tun {
   map<int, struct sockaddr_in> bs_addr_tbl_; // <bs_id, bs_addr_>.
   struct sockaddr_in client_addr_eth_, controller_addr_eth_;
   map<int, sockaddr_in> client_addr_ath_tbl_;  // <radio_id, client_addr_ath_>.
-  uint16_t port_eth_;
-  map<int, uint16_t> port_ath_tbl_; // <radio_id, port_ath_>.
-  int sock_fd_eth_;       // Sockets to handle request at the server side
-  map<int, int> sock_fd_ath_tbl_; // <radio_id, sock_fd_ath_>
+  int port_eth_;
+  map<int, int> port_ath_tbl_; // <radio_id, port_ath_>.
+  uint16_t sock_fd_eth_;       // Sockets to handle request at the server side
+  map<int, uint16_t> sock_fd_ath_tbl_; // <radio_id, sock_fd_ath_>
   vector<int> radio_ids_;
-  map<IOType, map<int, int>> fd_map_; // <IOType, <radio_id, fd_>>. For IOType other than kWspace, use default radio_id 0.
+  map<IOType, map<int, int> > fd_map_; // <IOType, <radio_id, fd_>>. For IOType other than kWspace, use default radio_id 0.
 };
 
 int cread(int fd, char *buf, int n);

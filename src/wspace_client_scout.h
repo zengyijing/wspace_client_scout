@@ -46,7 +46,7 @@ class WspaceClient {
    * Receive packets from the base station, from the front laptop, 
    * and from the cellular.
    */
-  void RcvDownlinkPkt(char *pkt, uint16 *len, int *radio_id);
+  void RcvDownlinkPkt(char *pkt, uint16 *len, Tun::IOType *type_out, int *radio_id);
 
   template<class T>
   friend bool IsIndExist(T *arr, int len, T val);

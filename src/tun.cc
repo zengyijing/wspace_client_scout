@@ -1,6 +1,6 @@
 #include "tun.h"
-
 using namespace std;
+
 int Tun::AllocTun(char *dev, int flags) {
   struct ifreq ifr;
   int fd, err;
@@ -77,10 +77,10 @@ void Tun::InitSock() {
   BindSocket(sock_fd_eth_, &client_addr_eth_);
 
   int port_ath = PORT_ATH;
-  for(vector<int>::iterator it = radio_ids_.begin(); it != radio_ids_.end(); ++it){
+  for(vector<int>::iterator it = radio_ids_.begin(); it != radio_ids_.end(); ++it) {
     sock_fd_ath_tbl_[*it] = CreateSock();
     port_ath_tbl_[*it] = port_ath++;
-    CreateAddr(port_ath, &client_addr_ath_tbl_[*it]);
+    CreateAddr(port_ath_tbl_[*it], &client_addr_ath_tbl_[*it]);
     BindSocket(sock_fd_ath_tbl_[*it], &client_addr_ath_tbl_[*it]);
   }
   // Their address
@@ -189,7 +189,7 @@ void Tun::BuildFDMap() {
     if (IO_type != kWspace)
       fd_map_[IO_type][0] = GetFD(IO_type, 0); // default radio_id 0.
     else {
-      for(vector<int>::iterator it = radio_ids_.begin(); it != radio_ids_.end(); ++it){
+      for(vector<int>::iterator it = radio_ids_.begin(); it != radio_ids_.end(); ++it) {
         fd_map_[IO_type][*it] = GetFD(IO_type, *it);
       }
     }

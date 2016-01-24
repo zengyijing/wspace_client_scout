@@ -26,7 +26,7 @@
 #define ATH_DATA 1
 #define ATH_CODE 2
 #define DATA_ACK 3
-#define RAW_ACK 4
+#define RAW_ACK 5
 #define CELL_DATA 6
 #define GPS 7
 #define BS_STATS 8
@@ -567,7 +567,6 @@ class AckHeader {
 
   void set_ids(int client_id, int radio_id) { client_id_ = client_id; radio_id_ = radio_id; }
 // Data
-  // @yijing: add client_id and radio_id.
   char type_;
   uint32 ack_seq_;          // Record the sequence number of ack 
   uint16 num_nacks_;        // number of nacks in the packet

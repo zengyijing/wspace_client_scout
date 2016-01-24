@@ -13,8 +13,12 @@ int main(int argc, char **argv) {
 
   Pthread_create(&wspace_client->p_rx_rcv_ath_, NULL, LaunchRxRcvAth, NULL);
   Pthread_create(&wspace_client->p_rx_write_tun_, NULL, LaunchRxWriteTun, NULL);
-  for (map<int, pthread_t>::iterator it = wspace_client->p_rx_create_raw_ack_tbl_.begin(); it != wspace_client->p_rx_create_raw_ack_tbl_.end(); ++it) {
-    Pthread_create(&it->second, NULL, LaunchRxCreateRawAck, &it->first);
+  int radio_id[MAX_RADIO] = {0};
+  int i = 0;
+  for (vector<int>::iterator it = wspace_client->tun_.radio_ids_.begin(); it != wspace_client->tun_.radio_ids_.end(); ++it) {
+    radio_id[i] = *it;
+    int thread = Pthread_create(&wspace_client->p_rx_create_raw_ack_tbl_[*it], NULL, LaunchRxCreateRawAck, &radio_id[i]);
+    ++i;
   }
   Pthread_create(&wspace_client->p_rx_create_data_ack_, NULL, LaunchRxCreateDataAck, NULL);
   Pthread_create(&wspace_client->p_rx_send_cell_, NULL, LaunchRxSendCell, NULL);
@@ -22,8 +26,9 @@ int main(int argc, char **argv) {
 
   Pthread_join(wspace_client->p_rx_rcv_ath_, NULL);
   Pthread_join(wspace_client->p_rx_write_tun_, NULL);
-  Pthread_join(wspace_client->p_rx_create_front_raw_ack_, NULL);
-  Pthread_join(wspace_client->p_rx_create_back_raw_ack_, NULL);
+  for (vector<int>::iterator it = wspace_client->tun_.radio_ids_.begin(); it != wspace_client->tun_.radio_ids_.end(); ++it) {
+    Pthread_join(wspace_client->p_rx_create_raw_ack_tbl_[*it], NULL);
+  }
   Pthread_join(wspace_client->p_rx_create_data_ack_, NULL);
   Pthread_join(wspace_client->p_rx_send_cell_, NULL);
   //Pthread_join(wspace_client->p_rx_parse_gps_, NULL);
@@ -60,7 +65,7 @@ WspaceClient::WspaceClient(int argc, char *argv[], const char *optstring)
         break;
       case 'A':
         if ( tun_.radio_ids_.size() == 0 )
-          Perror("Need to set number of radios before setting raw_pkt_buf_tbl_");
+          Perror("Need to set number of radios before setting raw_pkt_buf_tbl_\n");
         max_ack_cnt_ = uint8(atoi(optarg));
         for (map<int, RxRawBuf>::iterator it = raw_pkt_buf_tbl_.begin(); it != raw_pkt_buf_tbl_.end(); ++it) {
           it->second.set_max_send_cnt(max_ack_cnt_);
@@ -148,7 +153,7 @@ void* WspaceClient::RxRcvAth(void* arg) {
   uint16 nread=0;
   TIME start, end;
   char *pkt = new char[PKT_SIZE];
-  Tun::IOType type = 0;
+  Tun::IOType type;
   while (1) {
     int k = -1, n = -1;
     int radio_id = 0;
@@ -163,7 +168,7 @@ void* WspaceClient::RxRcvAth(void* arg) {
     }
 #endif
 
-    if (type == kWspace && radio_ids_.count(radio_id))
+    if (type == Tun::kWspace && raw_pkt_buf_tbl_.count(radio_id))
       raw_pkt_buf_tbl_[radio_id].PushPkts(hdr->raw_seq(), true/**is good*/);  
     /** else, do nothing for the cellular case.*/
 
@@ -176,7 +181,7 @@ void* WspaceClient::RxRcvAth(void* arg) {
     uint32 per_pkt_duration = (nread * 8.0) / (hdr->GetRate() / 10.0) + DIFS_80211ag + SLOT_TIME * 5;  /** in us.*/
 
     if (batch_id > batch_id_parse) {  /** Out of batch order.*/
-      if (type == kCellular) {
+      if (type == Tun::kCellular) {
         assert(coding_index_parse < k);
         seq_num = start_seq_parse + coding_index_parse;
         uint16 len = hdr->lens()[coding_index_parse];
@@ -307,7 +312,7 @@ void* WspaceClient::RxCreateRawAck(void* arg) {
   AckPkt *ack_pkt = new AckPkt;
   int *radio_id = (int*)arg;
   int bs_id = bs_ids_.front(); // TODO: Enable dynamically assignment of bs_id.
-
+  printf("RxCreateRawAck start, radio_id:%d\n", *radio_id);
   raw_buf = &raw_pkt_buf_tbl_[*radio_id];
   ack_type = RAW_ACK;
 
@@ -334,7 +339,7 @@ void* WspaceClient::RxSendCell(void* arg) {
   char *pkt = new char[BUF_SIZE];
   CellDataHeader cell_hdr;
   while (1) {
-    nread = tun_.Read(Tun::kTun, &(pkt[CELL_DATA_HEADER_SIZE]), PKT_SIZE-CELL_DATA_HEADER_SIZE);
+    nread = tun_.Read(Tun::kTun, &(pkt[CELL_DATA_HEADER_SIZE]), PKT_SIZE-CELL_DATA_HEADER_SIZE, 0);
     memcpy(pkt, (char*)&cell_hdr, CELL_DATA_HEADER_SIZE);
     tun_.Write(Tun::kController, pkt, nread+CELL_DATA_HEADER_SIZE, 0);
   }
@@ -359,13 +364,10 @@ void* WspaceClient::RxParseGPS(void* arg) {
 
 void WspaceClient::RcvDownlinkPkt(char *pkt, uint16 *len, Tun::IOType *type_out, int *radio_id) {
   vector<Tun::IOType> type_arr;
-  Tun::IOType type_out;
-
   type_arr.push_back(Tun::kWspace);
   type_arr.push_back(Tun::kCellular);
-
-  *len = tun_.Read(type_arr, pkt, PKT_SIZE, &type_out, radio_id);
-  assert(type_out == Tun::kWspace || type_out == Tun::kCellular);
+  *len = tun_.Read(type_arr, pkt, PKT_SIZE, type_out, radio_id);
+  assert(*type_out == Tun::kWspace || *type_out == Tun::kCellular);
 }
 
 void* LaunchRxRcvAth(void* arg) {
