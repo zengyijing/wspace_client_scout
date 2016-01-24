@@ -564,13 +564,11 @@ void AckPkt::ParseNack(char *type, uint32 *ack_seq, uint16 *num_nacks, uint32 *e
  */ 
 void AckPkt::Print() {
   if (ack_hdr_.type_ == DATA_ACK)
-    printf("data_ack");
-  else if (ack_hdr_.type_ == RAW_FRONT_ACK)
-    printf("raw_front_ack");
+    printf("data_ack:");
   else
-    printf("raw_back_ack");
-  printf("[%u] end_seq[%u] num_nacks[%u] num_pkts[%u] {", 
-  ack_hdr_.ack_seq_, ack_hdr_.end_seq_, ack_hdr_.num_nacks_, ack_hdr_.num_pkts_);
+    printf("raw_ack:");
+  printf("client_id[%d] radio_id[%d] seq[%u] end_seq[%u] num_nacks[%u] num_pkts[%u] {", 
+      ack_hdr_.client_id_, ack_hdr_radio_id_, ack_hdr_.ack_seq_, ack_hdr_.end_seq_, ack_hdr_.num_nacks_, ack_hdr_.num_pkts_);
   for (int i = 0; i < ack_hdr_.num_nacks_; i++) {
     printf("%u ", ack_hdr_.start_nack_seq_ + rel_seq_arr_[i]);
   }

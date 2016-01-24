@@ -8,13 +8,6 @@
 #include "fec.h"
 #include "gps_parser.h"
 
-enum Laptop {
-  kInvalidLaptop = 0, 
-  kFrontLaptop, 
-  kBackLaptop,
-  kCellular, 
-};
-
 class WspaceClient {
  public:
   WspaceClient(int argc, char *argv[], const char *optstring);
@@ -36,27 +29,24 @@ class WspaceClient {
 
 // Data member
   RxDataBuf  data_pkt_buf_;  /** Store the data packets and the data sequence number for retransmission. */
-  pthread_t p_rx_rcv_ath_, p_rx_write_tun_, p_rx_create_data_ack_, 
-  // @yijing: create a thread for each radio to send ack.
-  p_rx_create_front_raw_ack_, p_rx_create_back_raw_ack_, p_rx_send_cell_, p_rx_parse_gps_;
+  pthread_t p_rx_rcv_ath_, p_rx_write_tun_, p_rx_create_data_ack_, p_rx_send_cell_, p_rx_parse_gps_;
+  map<int, pthread_t> p_rx_create_raw_ack_tbl_;
   Tun tun_;
   int ack_time_out_;  /** in ms. */
   int block_time_;    /** in ms. */
   uint8 max_ack_cnt_;
   CodeInfo decoder_; 
-  // @yijing: map of rx raw buf.
-  RxRawBuf raw_pkt_front_buf_, raw_pkt_back_buf_;  /** Store the raw sequence number for channel estimation. */
+  map<int, RxRawBuf> raw_pkt_buf_tbl_; // <radio_id, RxRawBuf>
   BatchInfo batch_info_;  /** Pass the info between RxRcvAth and CreateDataAck. */
   GPSParser gps_parser_;
   int min_pkt_cnt_;  /** Wait for some packets to send the raw ack. */
   vector<int> bs_ids_;
-
  private:
   /**
    * Receive packets from the base station, from the front laptop, 
    * and from the cellular.
    */
-  void RcvDownlinkPkt(char *pkt, uint16 *len, Laptop *laptop);
+  void RcvDownlinkPkt(char *pkt, uint16 *len, int *radio_id);
 
   template<class T>
   friend bool IsIndExist(T *arr, int len, T val);

@@ -7,17 +7,15 @@ using namespace std;
 
 int main(int argc, char **argv) {
   printf("PKT_SIZE: %d\n", PKT_SIZE);
-  const char* args = "T:B:i:I:S:s:C:A:p:n:hd:";
+  const char* args = "T:B:i:I:S:s:C:A:p:n:hd:r:";
   wspace_client = new WspaceClient(argc, argv, args);
-  wspace_client->tun_.CreateConn();
-  
-  Laptop front_laptop = kFrontLaptop;
-  Laptop back_laptop = kBackLaptop;
+  wspace_client->tun_.Init();
 
   Pthread_create(&wspace_client->p_rx_rcv_ath_, NULL, LaunchRxRcvAth, NULL);
   Pthread_create(&wspace_client->p_rx_write_tun_, NULL, LaunchRxWriteTun, NULL);
-  Pthread_create(&wspace_client->p_rx_create_front_raw_ack_, NULL, LaunchRxCreateRawAck, &front_laptop);
-  Pthread_create(&wspace_client->p_rx_create_back_raw_ack_, NULL, LaunchRxCreateRawAck, &back_laptop);
+  for (map<int, pthread_t>::iterator it = wspace_client->p_rx_create_raw_ack_tbl_.begin(); it != wspace_client->p_rx_create_raw_ack_tbl_.end(); ++it) {
+    Pthread_create(&it->second, NULL, LaunchRxCreateRawAck, &it->first);
+  }
   Pthread_create(&wspace_client->p_rx_create_data_ack_, NULL, LaunchRxCreateDataAck, NULL);
   Pthread_create(&wspace_client->p_rx_send_cell_, NULL, LaunchRxSendCell, NULL);
   //Pthread_create(&wspace_client->p_rx_parse_gps_, NULL, LaunchRxParseGPS, NULL);
@@ -61,9 +59,12 @@ WspaceClient::WspaceClient(int argc, char *argv[], const char *optstring)
         printf("controller_ip_eth: %s\n", tun_.controller_ip_eth_);
         break;
       case 'A':
+        if ( tun_.radio_ids_.size() == 0 )
+          Perror("Need to set number of radios before setting raw_pkt_buf_tbl_");
         max_ack_cnt_ = uint8(atoi(optarg));
-        raw_pkt_front_buf_.set_max_send_cnt(max_ack_cnt_);
-        raw_pkt_back_buf_.set_max_send_cnt(max_ack_cnt_);
+        for (map<int, RxRawBuf>::iterator it = raw_pkt_buf_tbl_.begin(); it != raw_pkt_buf_tbl_.end(); ++it) {
+          it->second.set_max_send_cnt(max_ack_cnt_);
+        }
         printf("Max ACK CNT: %u\n", max_ack_cnt_);
         break;
       case 'p':
@@ -90,14 +91,25 @@ WspaceClient::WspaceClient(int argc, char *argv[], const char *optstring)
       case 'S': {
         ParseIP(bs_ids_, tun_.bs_ip_tbl_, tun_.bs_addr_tbl_);
         break;
-      } 
+      }
+      case 'r': {
+        string radio;
+        stringstream ss(optarg);
+        while(getline(ss, radio, ',')) {
+          tun_.radio_ids_.push_back(atoi(radio.c_str()));
+        }
+        break;
+      }
       default:
         Perror("Usage: %s -i tun0/tap0 -S server_eth_ip -s server_ath_ip -C client_eth_ip\n",argv[0]);
     }
   }
-  assert(tun_.if_name_[0] && tun_.controller_ip_eth_[0] && tun_.client_id_ && tun_.bs_ip_tbl_.size());
+  assert(tun_.if_name_[0] && tun_.controller_ip_eth_[0] && tun_.client_id_ && tun_.bs_ip_tbl_.size() && tun_.radio_ids_.size());
   for (map<int, string>::iterator it = tun_.bs_ip_tbl_.begin(); it != tun_.bs_ip_tbl_.end(); ++it) {
     assert(strlen(it->second.c_str()));
+  }
+  if(tun_.radio_ids_.size() > MAX_RADIO) {
+    Perror("Need to revise 901-base.patch to enable more radios!\n");
   }
 }
 
@@ -136,13 +148,11 @@ void* WspaceClient::RxRcvAth(void* arg) {
   uint16 nread=0;
   TIME start, end;
   char *pkt = new char[PKT_SIZE];
-
+  Tun::IOType type = 0;
   while (1) {
     int k = -1, n = -1;
-    Laptop laptop = kInvalidLaptop;
-    RcvDownlinkPkt(pkt, &nread, &laptop);
-    //if (laptop == kBackLaptop) continue;
-    assert(laptop != kInvalidLaptop);
+    int radio_id = 0;
+    RcvDownlinkPkt(pkt, &nread, &type, &radio_id);
 
     // Get the header info
     hdr = (AthCodeHeader*)pkt;
@@ -153,23 +163,20 @@ void* WspaceClient::RxRcvAth(void* arg) {
     }
 #endif
 
-    // @yijing: fix laptop.
-    if (laptop == kFrontLaptop)
-      raw_pkt_front_buf_.PushPkts(hdr->raw_seq(), true/**is good*/);
-    else if (laptop == kBackLaptop)
-      raw_pkt_back_buf_.PushPkts(hdr->raw_seq(), true);  
+    if (type == kWspace && radio_ids_.count(radio_id))
+      raw_pkt_buf_tbl_[radio_id].PushPkts(hdr->raw_seq(), true/**is good*/);  
     /** else, do nothing for the cellular case.*/
 
     hdr->ParseHeader(&batch_id_parse, &start_seq_parse, &coding_index_parse, &k, &n);
 #ifdef WRT_DEBUG
-    printf("Receive: laptop: %d raw_seq: %u batch_id: %u seq_num: %u start_seq: %u coding_index: %d k: %d n: %d\n", 
-    laptop, hdr->raw_seq(), batch_id_parse, start_seq_parse + coding_index_parse, start_seq_parse, 
+    printf("Receive: radio_id: %d raw_seq: %u batch_id: %u seq_num: %u start_seq: %u coding_index: %d k: %d n: %d\n", 
+    radio_id, hdr->raw_seq(), batch_id_parse, start_seq_parse + coding_index_parse, start_seq_parse, 
     coding_index_parse, k, n);
 #endif
     uint32 per_pkt_duration = (nread * 8.0) / (hdr->GetRate() / 10.0) + DIFS_80211ag + SLOT_TIME * 5;  /** in us.*/
 
     if (batch_id > batch_id_parse) {  /** Out of batch order.*/
-      if (laptop == kCellular) {
+      if (type == kCellular) {
         assert(coding_index_parse < k);
         seq_num = start_seq_parse + coding_index_parse;
         uint16 len = hdr->lens()[coding_index_parse];
@@ -298,23 +305,15 @@ void* WspaceClient::RxCreateRawAck(void* arg) {
   uint16 num_pkts = 0;
   RxRawBuf *raw_buf;
   AckPkt *ack_pkt = new AckPkt;
-  Laptop *laptop = (Laptop*)arg;
+  int *radio_id = (int*)arg;
   int bs_id = bs_ids_.front(); // TODO: Enable dynamically assignment of bs_id.
 
-  if (*laptop == kFrontLaptop) {
-    raw_buf = &raw_pkt_front_buf_;
-    ack_type = RAW_FRONT_ACK; 
-  }
-  else if (*laptop == kBackLaptop) {
-    raw_buf = &raw_pkt_back_buf_;
-    ack_type = RAW_BACK_ACK;
-  }
-  else
-    Perror("RxCreateRawAck: Invalid laptop[%d]\n", *laptop);
+  raw_buf = &raw_pkt_buf_tbl_[*radio_id];
+  ack_type = RAW_ACK;
 
   while (1) {
     ack_pkt->Init(ack_type);
-    ack_pkt->set_ids(tun_.client_id_, *laptop);
+    ack_pkt->set_ids(tun_.client_id_, *radio_id);
     raw_buf->PopPktStatus(nack_vec, &end_seq, &num_pkts, (uint32)min_pkt_cnt_);
     for (it = nack_vec.begin(); it != nack_vec.end(); it++) {
       ack_pkt->PushNack(*it);
@@ -358,31 +357,15 @@ void* WspaceClient::RxParseGPS(void* arg) {
   }
 }
 
-void WspaceClient::RcvDownlinkPkt(char *pkt, uint16 *len, Laptop *laptop) {
+void WspaceClient::RcvDownlinkPkt(char *pkt, uint16 *len, Tun::IOType *type_out, int *radio_id) {
   vector<Tun::IOType> type_arr;
   Tun::IOType type_out;
 
-  type_arr.push_back(Tun::kFrontWspace);
-  type_arr.push_back(Tun::kBackWspace);
+  type_arr.push_back(Tun::kWspace);
   type_arr.push_back(Tun::kCellular);
 
-  *len = tun_.Read(type_arr, pkt, PKT_SIZE, &type_out);
-  switch (type_out) {
-    case Tun::kFrontWspace:
-      *laptop = kFrontLaptop;
-      break;
-    
-    case Tun::kBackWspace:
-      *laptop = kBackLaptop;
-      break;
-    
-    case Tun::kCellular:
-      *laptop = kCellular;
-      break;
-
-    default:
-      assert(0);
-  } 
+  *len = tun_.Read(type_arr, pkt, PKT_SIZE, &type_out, radio_id);
+  assert(type_out == Tun::kWspace || type_out == Tun::kCellular);
 }
 
 void* LaunchRxRcvAth(void* arg) {

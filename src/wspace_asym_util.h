@@ -26,8 +26,7 @@
 #define ATH_DATA 1
 #define ATH_CODE 2
 #define DATA_ACK 3
-#define RAW_FRONT_ACK 4
-#define RAW_BACK_ACK 5
+#define RAW_ACK 4
 #define CELL_DATA 6
 #define GPS 7
 #define BS_STATS 8

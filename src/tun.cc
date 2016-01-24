@@ -72,22 +72,24 @@ void Tun::InitSock() {
 
   // Create sockets
   sock_fd_eth_ = CreateSock();
-  sock_fd_ath_ = CreateSock();
-
   // Self address
-  CreateAddr(port_eth_, &client_addr_eth_);   
-  CreateAddr(port_ath_, &client_addr_ath_);   
+  CreateAddr(port_eth_, &client_addr_eth_);
+  BindSocket(sock_fd_eth_, &client_addr_eth_);
+
+  int port_ath = PORT_ATH;
+  for(vector<int>::iterator it = radio_ids_.begin(); it != radio_ids_.end(); ++it){
+    sock_fd_ath_tbl_[*it] = CreateSock();
+    port_ath_tbl_[*it] = port_ath++;
+    CreateAddr(port_ath, &client_addr_ath_tbl_[*it]);
+    BindSocket(sock_fd_ath_tbl_[*it], &client_addr_ath_tbl_[*it]);
+  }
   // Their address
   CreateAddr(controller_ip_eth_, port_eth_, &controller_addr_eth_);
-
-  BindSocket(sock_fd_eth_, &client_addr_eth_);
-  BindSocket(sock_fd_ath_, &client_addr_ath_);
 }
 
-void Tun::CreateConn() {
+void Tun::Init() {
   InitSock();
   //InformServerAddr(sock_fd_eth_, &server_addr_eth_);
-  relay_sock_.SocketSetUp("", port_relay_, true/**bind to this port*/);
   BuildFDMap();
 }
 
@@ -106,19 +108,15 @@ void Tun::InformServerAddr(int sock_fd, const sockaddr_in *server_addr) {
   //printf("Server ethernet ip: %s\n", inet_ntoa(server_addr->sin_addr));
 }
 
-uint16_t Tun::Read(const IOType &type, char *buf, uint16_t len) {
+uint16_t Tun::Read(const IOType &type, char *buf, uint16_t len, int *radio_id) {
   uint16_t nread=-1;
   assert(len > 0);
 
   if (type == kTun) {
     nread = cread(tun_fd_, buf, len);
   }
-  // @yijing: Use a for loop for different radios. 
-  else if (type == kBackWspace) {
-    nread = recvfrom(sock_fd_ath_, buf, len, 0, NULL, NULL);
-  }
-  else if (type == kFrontWspace)  /** For front relay over Ethernet.*/ {
-    nread = relay_sock_.RecvFrom(buf, len);
+  else if (type == kWspace) {
+    nread = recvfrom(sock_fd_ath_tbl_[*radio_id], buf, len, 0, NULL, NULL);
   }
   else if (type == kCellular) {
     nread = recvfrom(sock_fd_eth_, buf, len, 0, NULL, NULL);
@@ -129,29 +127,36 @@ uint16_t Tun::Read(const IOType &type, char *buf, uint16_t len) {
   return nread;
 }
 
-uint16_t Tun::Read(const vector<IOType> &type_arr, char *buf, uint16_t len, IOType *type_out) {
+uint16_t Tun::Read(const vector<IOType> &type_arr, char *buf, uint16_t len, IOType *type_out, int *radio_id) {
   uint16_t nread = 0;
   int max_fd = -1;
   fd_set rd_set;
   FD_ZERO(&rd_set);
 
   for (size_t i = 0; i < type_arr.size(); i++) {
-    int fd = fd_map_[type_arr[i]];
-    FD_SET(fd, &rd_set);
-    max_fd = max(max_fd, fd);
+    for (map<int, int>::iterator it = fd_map_[type_arr[i]].begin(); it != fd_map_[type_arr[i]].end(); ++it) {
+      int fd = it->second;
+      FD_SET(fd, &rd_set);
+      max_fd = max(max_fd, fd);
+    }
   }
-
   select(max_fd+1, &rd_set, NULL, NULL, NULL);
 
+  bool read_available = false;
   /** Check which interface has the packet and read it.*/
   for (size_t i = 0; i < type_arr.size(); i++) {
     IOType IO_type = type_arr[i];
-    int fd = fd_map_[IO_type];
-    if (FD_ISSET(fd, &rd_set)) {
-      nread = Read(IO_type, buf, len);
-      *type_out = IO_type;
-      break;
+    for (map<int, int>::iterator it = fd_map_[type_arr[i]].begin(); it != fd_map_[type_arr[i]].end(); ++it) {
+      int fd = it->second;
+      if (FD_ISSET(fd, &rd_set)) {
+        nread = Read(IO_type, buf, len, radio_id);
+        *type_out = IO_type;
+        read_available = true;
+        break;
+      }
     }
+    if (read_available)
+      break;
   }
   assert(nread > 0);  /** We must have read sth from some interface.*/
   return nread;
@@ -177,21 +182,25 @@ uint16_t Tun::Write(const IOType &type, char *buf, uint16_t len, int bs_id) {
 }
 
 void Tun::BuildFDMap() {
-  IOType type_arr[] = {kTun, kFrontWspace, kBackWspace, kCellular};
+  IOType type_arr[] = {kTun, kWspace, kCellular};
   int sz = sizeof(type_arr)/sizeof(type_arr[0]);
-  for (int i = 0; i < sz; i++) {
+  for (int i = 0; i < sz; ++i) {
     IOType IO_type = type_arr[i];
-    fd_map_[IO_type] = GetFD(IO_type);
+    if (IO_type != kWspace)
+      fd_map_[IO_type][0] = GetFD(IO_type, 0); // default radio_id 0.
+    else {
+      for(vector<int>::iterator it = radio_ids_.begin(); it != radio_ids_.end(); ++it){
+        fd_map_[IO_type][*it] = GetFD(IO_type, *it);
+      }
+    }
   }
 }
 
-int Tun::GetFD(const IOType &type) {
+int Tun::GetFD(const IOType &type, int radio_id) {
   if (type == kTun)
     return tun_fd_;
-  else if (type == kBackWspace)
-    return sock_fd_ath_;
-  else if (type == kFrontWspace)
-    return relay_sock_.sid();
+  else if (type == kWspace)
+    return sock_fd_ath_tbl_[radio_id];
   else if (type == kCellular)
     return sock_fd_eth_;
   else
