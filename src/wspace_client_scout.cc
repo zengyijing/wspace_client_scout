@@ -153,6 +153,7 @@ void* WspaceClient::RxRcvAth(void* arg) {
     }
 #endif
 
+    // @yijing: fix laptop.
     if (laptop == kFrontLaptop)
       raw_pkt_front_buf_.PushPkts(hdr->raw_seq(), true/**is good*/);
     else if (laptop == kBackLaptop)

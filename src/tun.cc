@@ -113,6 +113,7 @@ uint16_t Tun::Read(const IOType &type, char *buf, uint16_t len) {
   if (type == kTun) {
     nread = cread(tun_fd_, buf, len);
   }
+  // @yijing: Use a for loop for different radios. 
   else if (type == kBackWspace) {
     nread = recvfrom(sock_fd_ath_, buf, len, 0, NULL, NULL);
   }

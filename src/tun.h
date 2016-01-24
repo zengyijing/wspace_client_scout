@@ -88,9 +88,11 @@ class Tun {
   int client_id_;
   std::map<int, string> bs_ip_tbl_; // <bs_id, bs_ip_eth_>.
   std::map<int, struct sockaddr_in> bs_addr_tbl_; // <bs_id, bs_addr>.
+  // @yijing: make a map for ath for multiple radios.
   struct sockaddr_in client_addr_eth_, client_addr_ath_, controller_addr_eth_; 
   uint16_t port_eth_, port_ath_, port_relay_;
   int sock_fd_eth_, sock_fd_ath_;       // Sockets to handle request at the server side
+  // @yijing: remove relay stuff.
   UdpSocket relay_sock_;
   std::map<IOType, int> fd_map_;
 };

@@ -568,6 +568,7 @@ class AckHeader {
 
   void set_ids(int client_id, int radio_id) { client_id_ = client_id; radio_id_ = radio_id; }
 // Data
+  // @yijing: add client_id and radio_id.
   char type_;
   uint32 ack_seq_;          // Record the sequence number of ack 
   uint16 num_nacks_;        // number of nacks in the packet
