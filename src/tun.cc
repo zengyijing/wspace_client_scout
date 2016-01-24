@@ -163,7 +163,7 @@ uint16_t Tun::Write(const IOType &type, char *buf, uint16_t len, int bs_id) {
   if (type == kTun) {
     nwrite = cwrite(tun_fd_, buf, len);
   }
-  else if (type == kCellular) {  // @Tan: kCellular is used for ACKs and uplink data but ACKs can go to a bs that is not server. It seems we need to differentiate ACKs with uplink data. Moreover, uplink data in fact can directly goes to controller.
+  else if (type == kCellular) {
     nwrite = sendto(sock_fd_eth_, buf, len, 0, (struct sockaddr*)&bs_addr_tbl_[bs_id], sizeof(struct sockaddr_in));
   }
   else if (type == kController) {
