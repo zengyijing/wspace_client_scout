@@ -272,7 +272,7 @@ void* WspaceClient::RxCreateDataAck(void* arg) {
   AckPkt *ack_pkt = new AckPkt;
   vector<uint32> nack_seq_arr;
   uint32 end_seq=0;
-  int bs_id = bs_ids_.front();
+  int bs_id = bs_ids_.front(); // TODO: Enable dynamically assignment of bs_id.
   while (1) {
     usleep(ack_time_out_*1000);
     data_pkt_buf_.FindNackSeqNum(block_time_, ACK_WINDOW, batch_info_, nack_seq_arr, end_seq);
@@ -297,7 +297,7 @@ void* WspaceClient::RxCreateRawAck(void* arg) {
   RxRawBuf *raw_buf;
   AckPkt *ack_pkt = new AckPkt;
   Laptop *laptop = (Laptop*)arg;
-  int bs_id = bs_ids_.front();
+  int bs_id = bs_ids_.front(); // TODO: Enable dynamically assignment of bs_id.
 
   if (*laptop == kFrontLaptop) {
     raw_buf = &raw_pkt_front_buf_;
@@ -343,7 +343,7 @@ void* WspaceClient::RxParseGPS(void* arg) {
   GPSHeader gps_hdr;
   GPSLogger gps_logger;
   gps_logger.ConfigFile();
-  int bs_id = bs_ids_.front();
+  int bs_id = bs_ids_.front(); // TODO: Enable dynamically assignment of bs_id.
   while (true) {
     bool is_available = gps_parser_.GetGPSReadings();
     if (is_available) {
