@@ -277,6 +277,7 @@ void* WspaceClient::RxCreateDataAck(void* arg) {
     usleep(ack_time_out_*1000);
     data_pkt_buf_.FindNackSeqNum(block_time_, ACK_WINDOW, batch_info_, nack_seq_arr, end_seq);
     ack_pkt->Init(DATA_ACK);  /** Data ack for retransmission. */
+    ack_pkt->set_ids(tun_.client_id_, 0);
     for (vector<uint32>::iterator it = nack_seq_arr.begin(); it != nack_seq_arr.end(); it++)
       ack_pkt->PushNack(*it);
     ack_pkt->set_end_seq(end_seq);
@@ -311,7 +312,8 @@ void* WspaceClient::RxCreateRawAck(void* arg) {
     Perror("RxCreateRawAck: Invalid laptop[%d]\n", *laptop);
 
   while (1) {
-    ack_pkt->Init(ack_type);  
+    ack_pkt->Init(ack_type);
+    ack_pkt->set_ids(tun_.client_id_, *laptop);
     raw_buf->PopPktStatus(nack_vec, &end_seq, &num_pkts, (uint32)min_pkt_cnt_);
     for (it = nack_vec.begin(); it != nack_vec.end(); it++) {
       ack_pkt->PushNack(*it);
