@@ -78,7 +78,7 @@ void Tun::InitSock() {
   CreateAddr(port_eth_, &client_addr_eth_);   
   CreateAddr(port_ath_, &client_addr_ath_);   
   // Their address
-  //CreateAddr(server_ip_eth_, port_eth_, &server_addr_eth_);
+  CreateAddr(controller_ip_eth_, port_eth_, &controller_addr_eth_);
 
   BindSocket(sock_fd_eth_, &client_addr_eth_);
   BindSocket(sock_fd_ath_, &client_addr_ath_);
@@ -156,7 +156,7 @@ uint16_t Tun::Read(const vector<IOType> &type_arr, char *buf, uint16_t len, IOTy
   return nread;
 }
 
-uint16_t Tun::Write(const IOType &type, char *buf, uint16_t len) {
+uint16_t Tun::Write(const IOType &type, char *buf, uint16_t len, int bs_id) {
   uint16_t nwrite=-1;
   assert(len > 0);
 
@@ -164,15 +164,10 @@ uint16_t Tun::Write(const IOType &type, char *buf, uint16_t len) {
     nwrite = cwrite(tun_fd_, buf, len);
   }
   else if (type == kCellular) {  // @Tan: kCellular is used for ACKs and uplink data but ACKs can go to a bs that is not server. It seems we need to differentiate ACKs with uplink data. Moreover, uplink data in fact can directly goes to controller.
-    if (bs_ip_tbl_.count(server_id_)) {
-      printf("current server ip is %s\n", bs_ip_tbl_[server_id_].c_str());
-      nwrite = sendto(sock_fd_eth_, buf, len, 0, (struct sockaddr*)&bs_addr_tbl_[server_id_], sizeof(struct sockaddr_in));
-    } else {
-      nwrite = sendto(sock_fd_eth_, buf, len, 0, (struct sockaddr*)&bs_addr_tbl_.begin()->second, sizeof(struct sockaddr_in));
-    }
-    if (nwrite == -1) {
-      perror("sendto failed!");
-    }
+    nwrite = sendto(sock_fd_eth_, buf, len, 0, (struct sockaddr*)&bs_addr_tbl_[bs_id], sizeof(struct sockaddr_in));
+  }
+  else if (type == kController) {
+    nwrite = sendto(sock_fd_eth_, buf, len, 0, (struct sockaddr*)&controller_addr_eth_, sizeof(struct sockaddr_in));
   }
   else
     assert(0);

@@ -536,13 +536,10 @@ class ControllerToClientHeader {
   void set_client_id (int id) { client_id_ = id; }
   int client_id() const { return client_id_; }
   char type() const { return type_; }
-  void set_bs_id (int id) { bs_id_ = id; }
-  int bs_id() const { return bs_id_; }
 
  private:
   char type_;
   int client_id_;
-  int bs_id_;
 };
 
 class AckHeader {

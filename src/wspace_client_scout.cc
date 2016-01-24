@@ -260,10 +260,7 @@ void* WspaceClient::RxWriteTun(void* arg) {
     if (is_pkt_available) {
       ControllerToClientHeader* hdr = (ControllerToClientHeader*)pkt;
       if (hdr->type() == CONTROLLER_TO_CLIENT && hdr->client_id() == tun_.client_id_) {
-        if(tun_.bs_ip_tbl_.count(hdr->bs_id()) && hdr->bs_id() != tun_.server_id_) {
-          tun_.server_id_ = hdr->bs_id();
-        }
-        tun_.Write(Tun::kTun, pkt + sizeof(ControllerToClientHeader), len - sizeof(ControllerToClientHeader));
+        tun_.Write(Tun::kTun, pkt + sizeof(ControllerToClientHeader), len - sizeof(ControllerToClientHeader), 0);
       }
     }
   }
@@ -275,14 +272,15 @@ void* WspaceClient::RxCreateDataAck(void* arg) {
   AckPkt *ack_pkt = new AckPkt;
   vector<uint32> nack_seq_arr;
   uint32 end_seq=0;
+  int bs_id = bs_ids_.front();
   while (1) {
     usleep(ack_time_out_*1000);
     data_pkt_buf_.FindNackSeqNum(block_time_, ACK_WINDOW, batch_info_, nack_seq_arr, end_seq);
     ack_pkt->Init(DATA_ACK);  /** Data ack for retransmission. */
     for (vector<uint32>::iterator it = nack_seq_arr.begin(); it != nack_seq_arr.end(); it++)
       ack_pkt->PushNack(*it);
-    ack_pkt->set_end_seq(end_seq);  
-    tun_.Write(Tun::kCellular, (char*)ack_pkt, ack_pkt->GetLen());
+    ack_pkt->set_end_seq(end_seq);
+    tun_.Write(Tun::kCellular, (char*)ack_pkt, ack_pkt->GetLen(), bs_id);
 #ifdef WRT_DEBUG
     ack_pkt->Print();
 #endif
@@ -299,6 +297,7 @@ void* WspaceClient::RxCreateRawAck(void* arg) {
   RxRawBuf *raw_buf;
   AckPkt *ack_pkt = new AckPkt;
   Laptop *laptop = (Laptop*)arg;
+  int bs_id = bs_ids_.front();
 
   if (*laptop == kFrontLaptop) {
     raw_buf = &raw_pkt_front_buf_;
@@ -322,7 +321,7 @@ void* WspaceClient::RxCreateRawAck(void* arg) {
     }
     ack_pkt->set_end_seq(end_seq);
     ack_pkt->set_num_pkts(num_pkts);
-    tun_.Write(Tun::kCellular, (char*)ack_pkt, ack_pkt->GetLen());
+    tun_.Write(Tun::kCellular, (char*)ack_pkt, ack_pkt->GetLen(), bs_id);
     //ack_pkt->Print();
   }
   delete ack_pkt;
@@ -335,7 +334,7 @@ void* WspaceClient::RxSendCell(void* arg) {
   while (1) {
     nread = tun_.Read(Tun::kTun, &(pkt[CELL_DATA_HEADER_SIZE]), PKT_SIZE-CELL_DATA_HEADER_SIZE);
     memcpy(pkt, (char*)&cell_hdr, CELL_DATA_HEADER_SIZE);
-    tun_.Write(Tun::kCellular, pkt, nread+CELL_DATA_HEADER_SIZE);
+    tun_.Write(Tun::kController, pkt, nread+CELL_DATA_HEADER_SIZE, 0);
   }
   delete[] pkt;
 }
@@ -344,12 +343,13 @@ void* WspaceClient::RxParseGPS(void* arg) {
   GPSHeader gps_hdr;
   GPSLogger gps_logger;
   gps_logger.ConfigFile();
+  int bs_id = bs_ids_.front();
   while (true) {
     bool is_available = gps_parser_.GetGPSReadings();
     if (is_available) {
       gps_hdr.Init(gps_parser_.time(), gps_parser_.location().latitude, 
           gps_parser_.location().longitude, gps_parser_.speed());
-      tun_.Write(Tun::kCellular, (char*)&gps_hdr, GPS_HEADER_SIZE);
+      tun_.Write(Tun::kCellular, (char*)&gps_hdr, GPS_HEADER_SIZE, bs_id);
       //gps_logger.LogGPSInfo(gps_hdr);
     }
   }

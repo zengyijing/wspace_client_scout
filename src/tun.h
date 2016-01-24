@@ -35,7 +35,8 @@ class Tun {
     kTun=1,
     kFrontWspace,
     kBackWspace, 
-    kCellular, 
+    kCellular,
+    kController, 
   };
 
   Tun(): tun_type_(IFF_TUN), port_eth_(PORT_ETH), 
@@ -43,7 +44,6 @@ class Tun {
     if_name_[0] = '\0';
     controller_ip_eth_[0] = '\0';
     client_id_ = 0;
-    server_id_ = 0;
   }
 
   ~Tun() {
@@ -78,7 +78,7 @@ class Tun {
    */
   uint16_t Read(const std::vector<IOType> &type_arr, char *buf, uint16_t len, IOType *type_out);
 
-  uint16_t Write(const IOType &type, char *buf, uint16_t len);
+  uint16_t Write(const IOType &type, char *buf, uint16_t len, int bs_id);
 
 // Data members:
   int tun_fd_;
@@ -86,7 +86,6 @@ class Tun {
   char if_name_[IFNAMSIZ];
   char controller_ip_eth_[16];
   int client_id_;
-  int server_id_;
   std::map<int, string> bs_ip_tbl_; // <bs_id, bs_ip_eth_>.
   std::map<int, struct sockaddr_in> bs_addr_tbl_; // <bs_id, bs_addr>.
   struct sockaddr_in client_addr_eth_, client_addr_ath_, controller_addr_eth_; 
