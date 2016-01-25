@@ -8,6 +8,31 @@
 #include "fec.h"
 #include "gps_parser.h"
 
+class OriginalSeqContext {
+ public:
+  OriginalSeqContext();
+  ~OriginalSeqContext();
+  
+  uint32 max_seq();
+  void set_max_seq(uint32 seq);
+  
+ private:
+  void Lock();
+  void UnLock();
+  uint32 max_seq_;
+  pthread_mutex_lock lock_;
+};
+
+class RadioContext {
+ private:
+  RxRawBuf raw_pkt_buf_;
+  RxDataBuf data_pkt_buf_;
+  CodeInfo decoder_;
+  BatchInfo batch_info_;
+  pthread_t p_rx_rcv_ath_, p_rx_write_tun_, p_rx_create_data_ack_, p_rx_create_raw_ack_tbl_; 
+};
+// @yijing: m[radio_id] = RadioContext(1, 2, 3);
+
 class WspaceClient {
  public:
   WspaceClient(int argc, char *argv[], const char *optstring);
@@ -42,6 +67,8 @@ class WspaceClient {
   GPSParser gps_parser_;
   int min_pkt_cnt_;  /** Wait for some packets to send the raw ack. */
   vector<int> bs_ids_;
+  OrignalSeqContext original_seq_context_;
+  
  private:
   /**
    * Receive packets from the base station, from the front laptop, 
