@@ -26,17 +26,18 @@ class WspaceClient {
   void* RxParseGPS(void* arg);
 
   void ParseIP(const vector<int> &ids, map<int, string> &ip_table, map<int, struct sockaddr_in> &addr_table);
+  void Init();
 
 // Data member
   RxDataBuf  data_pkt_buf_;  /** Store the data packets and the data sequence number for retransmission. */
   pthread_t p_rx_rcv_ath_, p_rx_write_tun_, p_rx_create_data_ack_, p_rx_send_cell_, p_rx_parse_gps_;
-  map<int, pthread_t> p_rx_create_raw_ack_tbl_;
+  map<int, pthread_t> p_rx_create_raw_ack_tbl_; // <radio_id, p_rx_create_raw_ack_>.
   Tun tun_;
   int ack_time_out_;  /** in ms. */
   int block_time_;    /** in ms. */
   uint8 max_ack_cnt_;
-  CodeInfo decoder_; 
-  map<int, RxRawBuf> raw_pkt_buf_tbl_; // <radio_id, RxRawBuf>
+  map<int, CodeInfo*> decoder_tbl_; // <radio_id, decoder_*> 
+  map<int, RxRawBuf> raw_pkt_buf_tbl_; // <radio_id, raw_pkt_buf_>.
   BatchInfo batch_info_;  /** Pass the info between RxRcvAth and CreateDataAck. */
   GPSParser gps_parser_;
   int min_pkt_cnt_;  /** Wait for some packets to send the raw ack. */

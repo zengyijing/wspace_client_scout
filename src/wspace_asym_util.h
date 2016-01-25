@@ -338,12 +338,14 @@ class BatchInfo {
   /**
    * Note: locking is included.
    */
-  void SetBatchInfo(uint32 batch_id, uint32 seq, bool decoding_done, int ind, int n, uint32 pkt_duration);
+  void SetBatchInfo(uint32 batch_id, uint32 seq, bool decoding_done, int ind, int n, uint32 pkt_duration, int bs_id);
 
   /**
    * Note: locking is included.
    */
   void GetBatchInfo(uint32 *seq, bool *decoding_done);
+
+  void GetBSId(int *bs_id);
 
   /**
    * Note: locking is included.
@@ -376,6 +378,7 @@ class BatchInfo {
   TIME cur_recv_time_;   /** The time to receive the current packet.*/
   double time_left_;     /** Duration left to finish receiving the current batch(in us). */
   pthread_mutex_t lock_;
+  int bs_id_;
 };
 
 class RxDataBuf: public BasicBuf {
@@ -457,7 +460,7 @@ class AthHeader {
  public:
   AthHeader() {}
   ~AthHeader() {}
-  AthHeader(char type, uint16 rate) : type_(type), raw_seq_(0), rate_(rate) {}
+  AthHeader(char type, uint16 rate) : type_(type), raw_seq_(0), rate_(rate), bs_id_(0) {}
 
   uint16 GetRate();
   void SetRate(uint16 rate);
@@ -470,6 +473,7 @@ class AthHeader {
   void set_is_good(bool is_good) { is_good_ = is_good; } 
 #endif
 
+  void set_bs_id(int bs_id) { bs_id_ = bs_id; }
 // Data
   char type_;
   uint32 raw_seq_;
@@ -477,6 +481,7 @@ class AthHeader {
 #ifdef RAND_DROP
   bool is_good_;
 #endif
+  int bs_id_;
 };
 
 class AthDataHeader : public AthHeader {
@@ -495,9 +500,9 @@ class AthCodeHeader : public AthHeader {
  public:
   AthCodeHeader() : AthHeader(ATH_CODE, ATH5K_RATE_CODE_6M), start_seq_(0), ind_(0), k_(0), n_(0) {}
   ~AthCodeHeader() {}
-  void SetHeader(uint32 batch_id, uint32 start_seq, char type, int ind, int k, int n, const uint16 *len_arr);
+  void SetHeader(uint32 batch_id, uint32 start_seq, char type, int ind, int k, int n, const uint16 *len_arr, int bs_id);
   void SetInd(uint8 ind) { ind_ = ind; }
-  void ParseHeader(uint32 *batch_id, uint32 *start_seq, int *ind, int *k, int *n) const;  
+  void ParseHeader(uint32 *batch_id, uint32 *start_seq, int *ind, int *k, int *n, int *bs_id) const;  
   /** Should copy the len_arr to somewhere. */
   uint16* lens() {
     assert(k_ > 0);
@@ -692,7 +697,7 @@ class RawPktRcvStatus {
  */
 class RxRawBuf {
  public:
-  RxRawBuf() : end_seq_(INVALID_SEQ_NUM), max_send_cnt_(1), pkt_cnt_(0), kMaxBufSize(ACK_WINDOW) { 
+  RxRawBuf() : end_seq_(INVALID_SEQ_NUM), max_send_cnt_(1), pkt_cnt_(0), kMaxBufSize(ACK_WINDOW), bs_id_(0) { 
     assert(max_send_cnt_ > 0);
     nack_deq_.clear();
     Pthread_mutex_init(&lock_, NULL);
@@ -711,7 +716,7 @@ class RxRawBuf {
    * @param [in] good_seq the sequence number of the current packet received.
    * @return true - insertion succeeds, false - out of order packets.
    */
-  bool PushPkts(uint32 cur_seq, bool is_cur_good);
+  bool PushPkts(uint32 cur_seq, bool is_cur_good, int bs_id);
   
   /**
    * Return the sequence number of lost packets with send_cnt < max_send_cnt, 
@@ -721,7 +726,7 @@ class RxRawBuf {
    * @param [out] nack_seq_vec: Vector of sequence numbers of loss packets for NACK.
    * @param [out] good_seq: Highest sequence number of the good packet received. 
    */
-  void PopPktStatus(std::vector<uint32> &seq_vec, uint32 *good_seq, uint16 *num_pkts, uint32 min_pkt_cnt = 10);
+  void PopPktStatus(std::vector<uint32> &seq_vec, uint32 *good_seq, uint16 *num_pkts, int *bs_id, uint32 min_pkt_cnt = 10);
 
   /**
    * Print out the status of each raw packet.
@@ -746,6 +751,7 @@ class RxRawBuf {
   uint32 pkt_cnt_;          /** Number of raw packets which have been curently logged. */
   pthread_mutex_t lock_;    /** Lock is needed because the bit map is access by two threads. */
   pthread_cond_t fill_cond_;  /** There are raw acks filled in. */
+  int bs_id_; /* record the bs id of last received raw pkt*/
 };
 
 void PrintPkt(char *pkt, uint16 len);

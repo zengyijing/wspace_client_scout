@@ -9,7 +9,7 @@ int main(int argc, char **argv) {
   printf("PKT_SIZE: %d\n", PKT_SIZE);
   const char* args = "T:B:i:I:S:s:C:A:p:n:hd:r:";
   wspace_client = new WspaceClient(argc, argv, args);
-  wspace_client->tun_.Init();
+  wspace_client->Init();
 
   Pthread_create(&wspace_client->p_rx_rcv_ath_, NULL, LaunchRxRcvAth, NULL);
   Pthread_create(&wspace_client->p_rx_write_tun_, NULL, LaunchRxWriteTun, NULL);
@@ -33,12 +33,16 @@ int main(int argc, char **argv) {
   Pthread_join(wspace_client->p_rx_send_cell_, NULL);
   //Pthread_join(wspace_client->p_rx_parse_gps_, NULL);
 
+  for (vector<int>::iterator it = wspace_client->tun_.radio_ids_.begin(); it != wspace_client->tun_.radio_ids_.end(); ++it) {
+    delete wspace_client->decoder_tbl_[*it];
+  }
+
   delete wspace_client;
   return 0;
 }
 
 WspaceClient::WspaceClient(int argc, char *argv[], const char *optstring) 
-    : decoder_(CodeInfo::kDecoder, MAX_BATCH_SIZE, PKT_SIZE), min_pkt_cnt_(30) {
+    : min_pkt_cnt_(30) {
   int option;
   double speed = -1.0;
   while ((option = getopt(argc, argv, optstring)) > 0) {
@@ -135,6 +139,14 @@ void WspaceClient::ParseIP(const vector<int> &ids, map<int, string> &ip_table, m
   }
 }
 
+void WspaceClient::Init() {
+  tun_.Init();
+  for (vector<int>::iterator it = tun_.radio_ids_.begin(); it != tun_.radio_ids_.end(); ++it) {
+    printf("Init decoder_tbl_[%d]\n", *it);
+    decoder_tbl_[*it] = new CodeInfo(CodeInfo::kDecoder, MAX_BATCH_SIZE, PKT_SIZE);
+  }
+}
+
 template<class T>
 inline bool IsIndExist(T *arr, int len, T val) {
   T *p = find(arr, arr+len, val);
@@ -157,6 +169,7 @@ void* WspaceClient::RxRcvAth(void* arg) {
   while (1) {
     int k = -1, n = -1;
     int radio_id = 0;
+    int bs_id = 0;
     RcvDownlinkPkt(pkt, &nread, &type, &radio_id);
 
     // Get the header info
@@ -167,15 +180,16 @@ void* WspaceClient::RxRcvAth(void* arg) {
       continue;
     }
 #endif
+
+    hdr->ParseHeader(&batch_id_parse, &start_seq_parse, &coding_index_parse, &k, &n, &bs_id);
     if (type == Tun::kWspace && raw_pkt_buf_tbl_.count(radio_id)) {
-      raw_pkt_buf_tbl_[radio_id].PushPkts(hdr->raw_seq(), true/**is good*/);
+      raw_pkt_buf_tbl_[radio_id].PushPkts(hdr->raw_seq(), true/**is good*/, bs_id);
     }
     /** else, do nothing for the cellular case.*/
 
-    hdr->ParseHeader(&batch_id_parse, &start_seq_parse, &coding_index_parse, &k, &n);
 #ifdef WRT_DEBUG
-    printf("Receive: radio_id: %d raw_seq: %u batch_id: %u seq_num: %u start_seq: %u coding_index: %d k: %d n: %d\n", 
-    radio_id, hdr->raw_seq(), batch_id_parse, start_seq_parse + coding_index_parse, start_seq_parse, 
+    printf("Receive from bs_id:%d via radio_id: %d raw_seq: %u batch_id: %u seq_num: %u start_seq: %u coding_index: %d k: %d n: %d\n", 
+      bs_id, radio_id, hdr->raw_seq(), batch_id_parse, start_seq_parse + coding_index_parse, start_seq_parse, 
     coding_index_parse, k, n);
 #endif
     uint32 per_pkt_duration = (nread * 8.0) / (hdr->GetRate() / 10.0) + DIFS_80211ag + SLOT_TIME * 5;  /** in us.*/
@@ -198,56 +212,55 @@ void* WspaceClient::RxRcvAth(void* arg) {
       batch_id = batch_id_parse;
       decoding_done = false;
       early_decoding_cnt = 0;
-      decoder_.ClearInfo();
-      decoder_.SetCodeInfo(k, n, start_seq_parse);
+      decoder_tbl_[radio_id]->ClearInfo();
+      decoder_tbl_[radio_id]->SetCodeInfo(k, n, start_seq_parse);
       bzero(early_decoding_inds, MAX_BATCH_SIZE*sizeof(int));
-      decoder_.CopyLens(hdr->lens());
+      decoder_tbl_[radio_id]->CopyLens(hdr->lens());
       /** Prevent the start seq to be set to a smaller value due ot retransission.*/
       start_seq = (start_seq_parse > start_seq) ? start_seq_parse : start_seq;  
-      batch_info_.SetBatchInfo(batch_id_parse, start_seq-1, decoding_done, coding_index_parse, n, per_pkt_duration);
+      batch_info_.SetBatchInfo(batch_id_parse, start_seq-1, decoding_done, coding_index_parse, n, per_pkt_duration, bs_id);
       start.GetCurrTime();
     }
     else {  /** Handling the current batch. */
       /** Wait for the front antenna's transmisison to be done.*/
       if (!decoding_done)
         batch_info_.UpdateTimeLeft(coding_index_parse, n, per_pkt_duration);  
-      if (decoding_done || IsIndExist(decoder_.inds(), decoder_.coding_pkt_cnt(), coding_index_parse)) {
+      if (decoding_done || IsIndExist(decoder_tbl_[radio_id]->inds(), decoder_tbl_[radio_id]->coding_pkt_cnt(), coding_index_parse)) {
         continue;  /** Not a useful packet. Could be due to two antenna combining*/
       }
     }
 
-    assert(decoder_.PushPkt(nread - hdr->GetFullHdrLen(), hdr->GetPayloadStart(), coding_index_parse));
+    assert(decoder_tbl_[radio_id]->PushPkt(nread - hdr->GetFullHdrLen(), hdr->GetPayloadStart(), coding_index_parse));
 //    printf("Push encoding pkt cnt[%d] start_seq[%u] coding_index[%d] raw_seq[%u]\n", 
-//      decoder_.coding_pkt_cnt(), start_seq_parse, coding_index_parse, hdr->raw_seq());
+//      decoder_tbl_[radio_id]->coding_pkt_cnt(), start_seq_parse, coding_index_parse, hdr->raw_seq());
     /**
      * Enqueue the native packets before waiting for the full batch to decode. 
      * It benefits most under partial decoding failure.
      */
     if (coding_index_parse < k) {  
       seq_num = start_seq_parse + coding_index_parse;
-      data_pkt_buf_.EnqueuePkt(seq_num, decoder_.GetLen(coding_index_parse), (char*)hdr->GetPayloadStart());
+      data_pkt_buf_.EnqueuePkt(seq_num, decoder_tbl_[radio_id]->GetLen(coding_index_parse), (char*)hdr->GetPayloadStart());
       early_decoding_inds[early_decoding_cnt] = coding_index_parse;
 #ifdef WRT_DEBUG
       printf("Early enqueue pkt batch_id: %u seq_num: %u start_seq: %u index: %d len: %d\n", 
-        batch_id, seq_num, start_seq_parse, coding_index_parse, decoder_.GetLen(coding_index_parse));
+        batch_id, seq_num, start_seq_parse, coding_index_parse, decoder_tbl_[radio_id]->GetLen(coding_index_parse));
 #endif
       early_decoding_cnt++;
     } 
 
-    if (decoder_.coding_pkt_cnt() >= k) {  /** Have k unique coding packets for decoding. Shouldn't be greater though. */
+    if (decoder_tbl_[radio_id]->coding_pkt_cnt() >= k) {  /** Have k unique coding packets for decoding. Shouldn't be greater though. */
       uint32 decoding_duration;
       if (early_decoding_cnt != k) {  /** We need to recover some packets.*/
-        decoder_.DecodeBatch();
+        decoder_tbl_[radio_id]->DecodeBatch();
         for (int i = 0; i < k; i++) {
           if (!IsIndExist(early_decoding_inds, early_decoding_cnt, i)) {
             uint16 native_pkt_len=-1;
             seq_num = start_seq_parse + i;
-            assert(decoder_.PopPkt((uint8**)&buf_addr, &native_pkt_len));
+            assert(decoder_tbl_[radio_id]->PopPkt((uint8**)&buf_addr, &native_pkt_len));
             //printf("decode pkt batch_id: %u seq_num: %u len: %d\n", batch_id, seq_num, native_pkt_len);
             data_pkt_buf_.EnqueuePkt(seq_num, native_pkt_len, buf_addr);
-          }
-          else {
-            decoder_.MoveToNextPkt();
+          } else {
+            decoder_tbl_[radio_id]->MoveToNextPkt();
           }
         }
         end.GetCurrTime();
@@ -285,7 +298,7 @@ void* WspaceClient::RxCreateDataAck(void* arg) {
   AckPkt *ack_pkt = new AckPkt;
   vector<uint32> nack_seq_arr;
   uint32 end_seq=0;
-  int bs_id = bs_ids_.front(); // TODO: Enable dynamically assignment of bs_id.
+  int bs_id = 0;
   while (1) {
     usleep(ack_time_out_*1000);
     data_pkt_buf_.FindNackSeqNum(block_time_, ACK_WINDOW, batch_info_, nack_seq_arr, end_seq);
@@ -294,6 +307,8 @@ void* WspaceClient::RxCreateDataAck(void* arg) {
     for (vector<uint32>::iterator it = nack_seq_arr.begin(); it != nack_seq_arr.end(); it++)
       ack_pkt->PushNack(*it);
     ack_pkt->set_end_seq(end_seq);
+    batch_info_.GetBSId(&bs_id);
+    printf("Send Data Ack to bs_id:%d\n", bs_id);
     tun_.Write(Tun::kCellular, (char*)ack_pkt, ack_pkt->GetLen(), bs_id);
 #ifdef WRT_DEBUG
     ack_pkt->Print();
@@ -311,7 +326,7 @@ void* WspaceClient::RxCreateRawAck(void* arg) {
   RxRawBuf *raw_buf;
   AckPkt *ack_pkt = new AckPkt;
   int *radio_id = (int*)arg;
-  int bs_id = bs_ids_.front(); // TODO: Enable dynamically assignment of bs_id.
+  int bs_id = 0; // TODO: Enable dynamically assignment of bs_id.
   printf("RxCreateRawAck start, radio_id:%d\n", *radio_id);
   raw_buf = &raw_pkt_buf_tbl_[*radio_id];
   ack_type = RAW_ACK;
@@ -319,7 +334,7 @@ void* WspaceClient::RxCreateRawAck(void* arg) {
   while (1) {
     ack_pkt->Init(ack_type);
     ack_pkt->set_ids(tun_.client_id_, *radio_id);
-    raw_buf->PopPktStatus(nack_vec, &end_seq, &num_pkts, (uint32)min_pkt_cnt_);
+    raw_buf->PopPktStatus(nack_vec, &end_seq, &num_pkts, &bs_id, (uint32)min_pkt_cnt_);
     for (it = nack_vec.begin(); it != nack_vec.end(); it++) {
       ack_pkt->PushNack(*it);
       if (ack_pkt->IsFull()) {
@@ -328,6 +343,7 @@ void* WspaceClient::RxCreateRawAck(void* arg) {
     }
     ack_pkt->set_end_seq(end_seq);
     ack_pkt->set_num_pkts(num_pkts);
+    printf("Send Raw Ack to bs_id:%d\n", bs_id);
     tun_.Write(Tun::kCellular, (char*)ack_pkt, ack_pkt->GetLen(), bs_id);
     //ack_pkt->Print();
   }
