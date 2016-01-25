@@ -149,6 +149,7 @@ uint16_t Tun::Read(const vector<IOType> &type_arr, char *buf, uint16_t len, IOTy
     for (map<int, int>::iterator it = fd_map_[type_arr[i]].begin(); it != fd_map_[type_arr[i]].end(); ++it) {
       int fd = it->second;
       if (FD_ISSET(fd, &rd_set)) {
+        *radio_id = it->first;
         nread = Read(IO_type, buf, len, radio_id);
         *type_out = IO_type;
         read_available = true;

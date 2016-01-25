@@ -167,9 +167,9 @@ void* WspaceClient::RxRcvAth(void* arg) {
       continue;
     }
 #endif
-
-    if (type == Tun::kWspace && raw_pkt_buf_tbl_.count(radio_id))
-      raw_pkt_buf_tbl_[radio_id].PushPkts(hdr->raw_seq(), true/**is good*/);  
+    if (type == Tun::kWspace && raw_pkt_buf_tbl_.count(radio_id)) {
+      raw_pkt_buf_tbl_[radio_id].PushPkts(hdr->raw_seq(), true/**is good*/);
+    }
     /** else, do nothing for the cellular case.*/
 
     hdr->ParseHeader(&batch_id_parse, &start_seq_parse, &coding_index_parse, &k, &n);
