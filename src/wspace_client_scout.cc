@@ -202,7 +202,7 @@ void* WspaceClient::RxRcvAth(void* arg) {
 
 #ifdef WRT_DEBUG
     printf("Receive from bs_id:%d via radio_id: %d raw_seq: %u batch_id: %u seq_num: %u start_seq: %u coding_index: %d k: %d n: %d\n", 
-      bs_id, radio_id, hdr->raw_seq(), batch_id_parse, start_seq_parse + coding_index_parse, start_seq_parse, 
+      bs_id, *radio_id, hdr->raw_seq(), batch_id_parse, start_seq_parse + coding_index_parse, start_seq_parse, 
     coding_index_parse, k, n);
 #endif
     uint32 per_pkt_duration = (nread * 8.0) / (hdr->GetRate() / 10.0) + DIFS_80211ag + SLOT_TIME * 5;  /** in us.*/
