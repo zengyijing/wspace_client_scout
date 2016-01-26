@@ -15,15 +15,11 @@ int main(int argc, char **argv) {
   Pthread_create(&wspace_client->p_rx_send_cell_, NULL, LaunchRxSendCell, NULL);
   //Pthread_create(&wspace_client->p_rx_parse_gps_, NULL, LaunchRxParseGPS, NULL);
 
-  int radio_id[MAX_RADIO] = {0};
-  int i = 0;
   for (vector<int>::iterator it = wspace_client->tun_.radio_ids_.begin(); it != wspace_client->tun_.radio_ids_.end(); ++it) {
-    radio_id[i] = *it;
-    Pthread_create(wspace_client->radio_context_tbl_[*it]->p_rx_rcv_ath(), NULL, LaunchRxRcvAth, &radio_id[i]);
-    Pthread_create(wspace_client->radio_context_tbl_[*it]->p_rx_write_tun(), NULL, LaunchRxWriteTun, &radio_id[i]);
-    Pthread_create(wspace_client->radio_context_tbl_[*it]->p_rx_create_raw_ack(), NULL, LaunchRxCreateRawAck, &radio_id[i]);
-    Pthread_create(wspace_client->radio_context_tbl_[*it]->p_rx_create_data_ack(), NULL, LaunchRxCreateDataAck, &radio_id[i]);
-    ++i;
+    Pthread_create(wspace_client->radio_context_tbl_[*it]->p_rx_rcv_ath(), NULL, LaunchRxRcvAth, &(*it));
+    Pthread_create(wspace_client->radio_context_tbl_[*it]->p_rx_write_tun(), NULL, LaunchRxWriteTun, &(*it));
+    Pthread_create(wspace_client->radio_context_tbl_[*it]->p_rx_create_raw_ack(), NULL, LaunchRxCreateRawAck, &(*it));
+    Pthread_create(wspace_client->radio_context_tbl_[*it]->p_rx_create_data_ack(), NULL, LaunchRxCreateDataAck, &(*it));
   }
 
   Pthread_join(wspace_client->p_rx_send_cell_, NULL);
@@ -34,7 +30,6 @@ int main(int argc, char **argv) {
     Pthread_join(*(wspace_client->radio_context_tbl_[*it]->p_rx_create_raw_ack()), NULL);
     Pthread_join(*(wspace_client->radio_context_tbl_[*it]->p_rx_create_data_ack()), NULL);
   }
-
 
   for (vector<int>::iterator it = wspace_client->tun_.radio_ids_.begin(); it != wspace_client->tun_.radio_ids_.end(); ++it) {
     delete wspace_client->radio_context_tbl_[*it];

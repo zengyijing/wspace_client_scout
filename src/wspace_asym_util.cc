@@ -525,7 +525,7 @@ void GPSLogger::ConfigFile(const char* filename) {
     filename_ = filename;
     fp_ = fopen(filename_.c_str(), "w");
     assert(fp_);
-    fprintf(fp_, "###Seq\tTime\tLatitude\tLongitude\tSpeed\n");
+    fprintf(fp_, "###Seq\tTime\tLatitude\tLongitude\tSpeed\tClientID\n");
     fflush(fp_);
   }
   else {
@@ -536,7 +536,7 @@ void GPSLogger::ConfigFile(const char* filename) {
 void GPSLogger::LogGPSInfo(const GPSHeader &hdr) {
   if (fp_ == stdout)
     fprintf(fp_, "GPS pkt: ");
-  fprintf(fp_, "%d\t%.0f\t%.6f\t%.6f\t%.3f\n", hdr.seq_, hdr.time_, hdr.latitude_, hdr.longitude_, hdr.speed_);
+  fprintf(fp_, "%d\t%.0f\t%.6f\t%.6f\t%.3f\n", hdr.seq_, hdr.time_, hdr.latitude_, hdr.longitude_, hdr.speed_, hdr.client_id_);
   fflush(fp_);
 }
 
