@@ -395,7 +395,9 @@ void* WspaceClient::RxParseGPS(void* arg) {
     if (is_available) {
       gps_hdr.Init(gps_parser_.time(), gps_parser_.location().latitude, 
           gps_parser_.location().longitude, gps_parser_.speed(), tun_.client_id_);
-      tun_.Write(Tun::kController, (char*)&gps_hdr, GPS_HEADER_SIZE, 0);
+      for(vector<int>::iterator it = bs_ids_.begin(); it != bs_ids_.begin(); ++it) {
+        tun_.Write(Tun::kCellular, (char*)&gps_hdr, GPS_HEADER_SIZE, *it);
+      }
       //gps_logger.LogGPSInfo(gps_hdr);
     }
   }
