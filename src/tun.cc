@@ -90,7 +90,7 @@ void Tun::InitSock() {
 void Tun::Init() {
   InitSock();
   //InformServerAddr(sock_fd_eth_, &server_addr_eth_);
-  BuildFDMap();
+  //BuildFDMap();
 }
 
 void Tun::InformServerAddr(int sock_fd, const sockaddr_in *server_addr) {
@@ -108,7 +108,7 @@ void Tun::InformServerAddr(int sock_fd, const sockaddr_in *server_addr) {
   //printf("Server ethernet ip: %s\n", inet_ntoa(server_addr->sin_addr));
 }
 
-uint16_t Tun::Read(const IOType &type, char *buf, uint16_t len, int *radio_id) {
+uint16_t Tun::Read(const IOType &type, char *buf, uint16_t len, int radio_id) {
   uint16_t nread=-1;
   assert(len > 0);
 
@@ -116,7 +116,7 @@ uint16_t Tun::Read(const IOType &type, char *buf, uint16_t len, int *radio_id) {
     nread = cread(tun_fd_, buf, len);
   }
   else if (type == kWspace) {
-    nread = recvfrom(sock_fd_ath_tbl_[*radio_id], buf, len, 0, NULL, NULL);
+    nread = recvfrom(sock_fd_ath_tbl_[radio_id], buf, len, 0, NULL, NULL);
   }
   else if (type == kCellular) {
     nread = recvfrom(sock_fd_eth_, buf, len, 0, NULL, NULL);
@@ -126,7 +126,7 @@ uint16_t Tun::Read(const IOType &type, char *buf, uint16_t len, int *radio_id) {
   assert(nread > 0);
   return nread;
 }
-
+/*
 uint16_t Tun::Read(const vector<IOType> &type_arr, char *buf, uint16_t len, IOType *type_out, int *radio_id) {
   uint16_t nread = 0;
   int max_fd = -1;
@@ -143,7 +143,7 @@ uint16_t Tun::Read(const vector<IOType> &type_arr, char *buf, uint16_t len, IOTy
   select(max_fd+1, &rd_set, NULL, NULL, NULL);
 
   bool read_available = false;
-  /** Check which interface has the packet and read it.*/
+  // Check which interface has the packet and read it.
   for (size_t i = 0; i < type_arr.size(); i++) {
     IOType IO_type = type_arr[i];
     for (map<int, int>::iterator it = fd_map_[type_arr[i]].begin(); it != fd_map_[type_arr[i]].end(); ++it) {
@@ -159,9 +159,10 @@ uint16_t Tun::Read(const vector<IOType> &type_arr, char *buf, uint16_t len, IOTy
     if (read_available)
       break;
   }
-  assert(nread > 0);  /** We must have read sth from some interface.*/
+  assert(nread > 0);  // We must have read sth from some interface.
   return nread;
 }
+*/
 
 uint16_t Tun::Write(const IOType &type, char *buf, uint16_t len, int bs_id) {
   uint16_t nwrite=-1;
@@ -181,7 +182,7 @@ uint16_t Tun::Write(const IOType &type, char *buf, uint16_t len, int bs_id) {
   assert(nwrite == len);
   return nwrite;
 }
-
+/*
 void Tun::BuildFDMap() {
   IOType type_arr[] = {kTun, kWspace, kCellular};
   int sz = sizeof(type_arr)/sizeof(type_arr[0]);
@@ -207,7 +208,7 @@ int Tun::GetFD(const IOType &type, int radio_id) {
   else
     assert(0);
 }
-
+*/
 inline int cread(int fd, char *buf, int n) {
   int nread;
 

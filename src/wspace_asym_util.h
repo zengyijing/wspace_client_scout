@@ -344,9 +344,7 @@ class BatchInfo {
    * Note: locking is included.
    */
   void GetBatchInfo(uint32 *seq, bool *decoding_done);
-
-  void GetBSId(int *bs_id);
-
+  void GetBSId(int* bs_id);
   /**
    * Note: locking is included.
    */
@@ -442,7 +440,7 @@ class RxDataBuf: public BasicBuf {
    * @param [out] nack_seq_arr: Array of sequence numbers to be nacked.
    * @param [out] end_seq: The sequence number of the last good packet.
    */
-  void FindNackSeqNum(int block_time, int max_num_nacks, BatchInfo &batch_info, 
+  void FindNackSeqNum(int block_time, int max_num_nacks, BatchInfo* batch_info, 
         std::vector<uint32> &nack_seq_arr, uint32 &end_seq);
 
   void set_highest_decoded_seq(uint32 seq); 
@@ -538,12 +536,14 @@ class ControllerToClientHeader {
   ~ControllerToClientHeader() {}
 
   void set_client_id (int id) { client_id_ = id; }
+  void set_o_seq (uint32 seq) { o_seq_ = seq;}
   int client_id() const { return client_id_; }
   char type() const { return type_; }
-
+  uint32 o_seq() const { return o_seq_; }
  private:
   char type_;
   int client_id_;
+  uint32 o_seq_;
 };
 
 class AckHeader {
@@ -587,10 +587,10 @@ class GPSHeader {
   GPSHeader() : type_(GPS), seq_(0), speed_(-1.0) {}
   ~GPSHeader() {}
 
-  void Init(double time, double latitude, double longitude, double speed);
+  void Init(double time, double latitude, double longitude, double speed, int client_id);
 
   uint32 seq() const { assert(seq_ > 0); return seq_; }
-
+  int client_id() const { return client_id_; }
   double speed() const { assert(speed_ >= 0); return speed_; }
 
  private: 
@@ -601,7 +601,8 @@ class GPSHeader {
   double time_;
   double latitude_;
   double longitude_;
-  double speed_; 
+  double speed_;
+  int client_id_;
 };
 
 class GPSLogger {

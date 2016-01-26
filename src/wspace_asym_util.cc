@@ -266,7 +266,7 @@ bool RxDataBuf::DequeuePkt(uint16 *pkt_len, uint8 *pkt) {
   return is_pkt_available;
 }
 
-void RxDataBuf::FindNackSeqNum(int block_time, int max_num_nacks, BatchInfo &batch_info, 
+void RxDataBuf::FindNackSeqNum(int block_time, int max_num_nacks, BatchInfo* batch_info, 
         vector<uint32> &nack_seq_arr, uint32 &end_seq) {
   uint32 index=0, head_pt=0, tail_pt=0, end_pt=0, seq_num=0, batch_id; 
   uint32 highest_decoded_seq = 0;  /** Highest decoded seq in the previous batch. */
@@ -277,7 +277,7 @@ void RxDataBuf::FindNackSeqNum(int block_time, int max_num_nacks, BatchInfo &bat
   bool decoding_done = false;
   static uint32 batch_id_prev = 0;
 
-  batch_info.GetBatchID(&batch_id);
+  batch_info->GetBatchID(&batch_id);
   LockQueue();
   //printf("FindNackSeqNum: LockQueue batch_id[%u] batch_id_prev[%u] head_pt[%u] tail_pt[%u]\n", 
   //batch_id, batch_id_prev, RxDataBuf::head_pt(), RxDataBuf::tail_pt());
@@ -292,7 +292,7 @@ void RxDataBuf::FindNackSeqNum(int block_time, int max_num_nacks, BatchInfo &bat
   tail_pt = RxDataBuf::tail_pt();
   UnLockQueue();
   nack_seq_arr.clear();
-  batch_info.GetBatchInfo(&highest_decoded_seq, &decoding_done);
+  batch_info->GetBatchInfo(&highest_decoded_seq, &decoding_done);
   end_pt = tail_pt - 1;
   //printf("FindNackSeqNum: GetBatchInfo head_pt[%u] tail_pt[%u] end_pt[%u] decoding_done[%d] highest_decoded_seq[%u]\n", 
   //head_pt, tail_pt, end_pt, decoding_done, highest_decoded_seq);
@@ -312,7 +312,7 @@ void RxDataBuf::FindNackSeqNum(int block_time, int max_num_nacks, BatchInfo &bat
   }  
   else  /** decoding the current batch is done.*/ {
     end_seq = (highest_decoded_seq > tail_pt) ? highest_decoded_seq : tail_pt;
-    batch_info.GetBatchID(&batch_id);
+    batch_info->GetBatchID(&batch_id);
     if (batch_id > batch_id_prev)  /** Start acking the current batch.*/
       batch_id_prev = batch_id;
   }
@@ -501,7 +501,7 @@ void AthCodeHeader::ParseHeader(uint32 *batch_id, uint32 *start_seq, int *ind, i
 }
 
 /** GPS Header.*/
-void GPSHeader::Init(double time, double latitude, double longitude, double speed) {
+void GPSHeader::Init(double time, double latitude, double longitude, double speed, int client_id) {
   assert(speed >= 0);
   seq_++;
   type_ = GPS;
@@ -509,6 +509,7 @@ void GPSHeader::Init(double time, double latitude, double longitude, double spee
   latitude_ = latitude;
   longitude_ = longitude;
   speed_ = speed;
+  client_id_ = client_id;
 }
 
 /** GPSLogger.*/
@@ -679,7 +680,7 @@ void BatchInfo::GetBatchInfo(uint32 *seq, bool *is_decoding_done) {
   UnLock();
 }
 
-void BatchInfo::GetBSId(int *bs_id) {
+void BatchInfo::GetBSId(int* bs_id) {
   Lock();
   *bs_id = bs_id_;
   UnLock();
