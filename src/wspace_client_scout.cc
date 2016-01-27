@@ -183,6 +183,7 @@ void* WspaceClient::RxRcvAth(void* arg) {
   while (1) {
     int k = -1, n = -1;
     int bs_id = 0;
+    int client_id = 0;
     RcvDownlinkPkt(pkt, &nread, *radio_id);
 
     // Get the header info
@@ -194,12 +195,11 @@ void* WspaceClient::RxRcvAth(void* arg) {
     }
 #endif
 
-    hdr->ParseHeader(&batch_id_parse, &start_seq_parse, &coding_index_parse, &k, &n, &bs_id);
-    //if (type == Tun::kWspace) {
-      radio_context_tbl_[*radio_id]->raw_pkt_buf()->PushPkts(hdr->raw_seq(), true/**is good*/, bs_id);
-    //}
-    /** else, do nothing for the cellular case.*/
-
+    hdr->ParseHeader(&batch_id_parse, &start_seq_parse, &coding_index_parse, &k, &n, &bs_id, &client_id);
+    if (client_id != tun_.client_id_) { // This pkt is not for this client, move on.
+      continue;
+    }
+    radio_context_tbl_[*radio_id]->raw_pkt_buf()->PushPkts(hdr->raw_seq(), true/**is good*/, bs_id);
 #ifdef WRT_DEBUG
     printf("Receive from bs_id:%d via radio_id: %d raw_seq: %u batch_id: %u seq_num: %u start_seq: %u coding_index: %d k: %d n: %d\n", 
       bs_id, *radio_id, hdr->raw_seq(), batch_id_parse, start_seq_parse + coding_index_parse, start_seq_parse, 
