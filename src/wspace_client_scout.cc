@@ -302,7 +302,7 @@ void* WspaceClient::RxWriteTun(void* arg) {
     is_pkt_available = radio_context_tbl_[*radio_id]->data_pkt_buf()->DequeuePkt(&len, (uint8*)pkt);
     if (is_pkt_available) {
       ControllerToClientHeader* hdr = (ControllerToClientHeader*)pkt;
-      if (hdr->type() == CONTROLLER_TO_CLIENT && hdr->client_id() == tun_.client_id_) {
+      if (*pkt == CONTROLLER_TO_CLIENT && hdr->client_id() == tun_.client_id_) {
         if (original_seq_context_.need_update(hdr->o_seq())) {
           tun_.Write(Tun::kTun, pkt + sizeof(ControllerToClientHeader), len - sizeof(ControllerToClientHeader), 0);
         }
