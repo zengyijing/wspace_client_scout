@@ -253,7 +253,7 @@ bool RxDataBuf::DequeuePkt(uint16 *pkt_len, uint8 *pkt) {
       case kRead:
       
       case kDrop:
-        printf("<<<Drop pkt[%u]>>>\n", *seq_num);
+        //printf("<<<Drop pkt[%u]>>>\n", *seq_num);
         UpdateBookKeeping(index, 0, kEmpty, 0, 0, false);
         UnLockElement(index);
         IncrementHeadPt();
@@ -590,15 +590,15 @@ bool RxRawBuf::PushPkts(uint32 cur_seq, bool is_cur_good, int bs_id) {
       UnLock();
       return false;  
     }
-    printf("--Push good seq[%u] end_seq[%u] bs_id[%d]\n", cur_seq, end_seq_, bs_id);
+    //printf("--Push good seq[%u] end_seq[%u] bs_id[%d]\n", cur_seq, end_seq_, bs_id);
     if (cur_seq - end_seq_ <= kMaxBufSize - pkt_cnt_) {
       for (uint32 i = end_seq_+1; i < cur_seq; i++) {
         nack_deq_.push_back(RawPktRcvStatus(i, 0));
       }
       pkt_cnt_ += (cur_seq - end_seq_);
     } else {
-      printf("RxRawBuf: Warning: RxRawBuf Full! end_seq[%u] cur_seq[%u] pkt_cnt[%u]\n", 
-      end_seq_, cur_seq, pkt_cnt_);
+      /*printf("RxRawBuf: Warning: RxRawBuf Full! end_seq[%u] cur_seq[%u] pkt_cnt[%u]\n", 
+      end_seq_, cur_seq, pkt_cnt_);*/
       nack_deq_.clear();
       pkt_cnt_ = 1;
     }

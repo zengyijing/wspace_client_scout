@@ -64,7 +64,7 @@
 
 //#define TEST
 //#define RAND_DROP
-#define WRT_DEBUG
+//#define WRT_DEBUG
 
 typedef unsigned char uint8;
 typedef unsigned short uint16;

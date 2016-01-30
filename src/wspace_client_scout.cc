@@ -279,7 +279,7 @@ void* WspaceClient::RxRcvAth(void* arg) {
           }
         }
         end.GetCurrTime();
-        printf("Decoding duration: %gms\n", (end - start)/1000.);
+        //printf("Decoding duration: %gms\n", (end - start)/1000.);
       }
       decoding_done = true;
       radio_context_tbl_[*radio_id]->batch_info()->set_decoding_done(decoding_done);
@@ -329,7 +329,7 @@ void* WspaceClient::RxCreateDataAck(void* arg) {
       ack_pkt->PushNack(*it);
     ack_pkt->set_end_seq(end_seq);
     radio_context_tbl_[*radio_id]->batch_info()->GetBSId(&bs_id);
-    printf("Send Data Ack to bs_id:%d\n", bs_id);
+    //printf("Send Data Ack to bs_id:%d\n", bs_id);
     tun_.Write(Tun::kCellular, (char*)ack_pkt, ack_pkt->GetLen(), bs_id);
 #ifdef WRT_DEBUG
     ack_pkt->Print();
@@ -361,7 +361,7 @@ void* WspaceClient::RxCreateRawAck(void* arg) {
     }
     ack_pkt->set_end_seq(end_seq);
     ack_pkt->set_num_pkts(num_pkts);
-    printf("Send Raw Ack to bs_id:%d\n", bs_id);
+    //printf("Send Raw Ack to bs_id:%d\n", bs_id);
     tun_.Write(Tun::kCellular, (char*)ack_pkt, ack_pkt->GetLen(), bs_id);
     //ack_pkt->Print();
   }
