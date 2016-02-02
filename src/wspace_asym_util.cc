@@ -552,13 +552,13 @@ void GPSLogger::LogGPSInfo(const GPSHeader &hdr) {
  * @param [out] end_seq: Highest sequence number of the good packets.
  * @param [out] seq_arr: Array of sequence numbers of lost packets.
 */ 
-void AckPkt::ParseNack(char *type, uint32 *ack_seq, uint16 *num_nacks, uint32 *end_seq, int* client_id, int* radio_id, uint32 *seq_arr, uint16 *num_pkts) {
+void AckPkt::ParseNack(char *type, uint32 *ack_seq, uint16 *num_nacks, uint32 *end_seq, int* client_id, int* bs_id, uint32 *seq_arr, uint16 *num_pkts) {
   *type = ack_hdr_.type_;
   *ack_seq = ack_hdr_.ack_seq_;
   *num_nacks = ack_hdr_.num_nacks_;
   *end_seq = ack_hdr_.end_seq_;
   *client_id = ack_hdr_.client_id_;
-  *radio_id = ack_hdr_.radio_id_;
+  *bs_id = ack_hdr_.bs_id_;
   if (num_pkts)
     *num_pkts = ack_hdr_.num_pkts_;
   for (int i = 0; i < ack_hdr_.num_nacks_; i++) {
@@ -574,8 +574,8 @@ void AckPkt::Print() {
     printf("data_ack:");
   else
     printf("raw_ack:");
-  printf("client_id[%d] radio_id[%d] seq[%u] end_seq[%u] num_nacks[%u] num_pkts[%u] {", 
-      ack_hdr_.client_id_, ack_hdr_.radio_id_, ack_hdr_.ack_seq_, ack_hdr_.end_seq_, ack_hdr_.num_nacks_, ack_hdr_.num_pkts_);
+  printf("client_id[%d] bs_id[%d] seq[%u] end_seq[%u] num_nacks[%u] num_pkts[%u] {", 
+      ack_hdr_.client_id_, ack_hdr_.bs_id_, ack_hdr_.ack_seq_, ack_hdr_.end_seq_, ack_hdr_.num_nacks_, ack_hdr_.num_pkts_);
   for (int i = 0; i < ack_hdr_.num_nacks_; i++) {
     printf("%u ", ack_hdr_.start_nack_seq_ + rel_seq_arr_[i]);
   }

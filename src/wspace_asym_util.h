@@ -26,6 +26,7 @@
 #define ATH_DATA 1
 #define ATH_CODE 2
 #define DATA_ACK 3
+#define ATH_PROBE 4
 #define RAW_ACK 5
 #define CELL_DATA 6
 #define GPS 7
@@ -543,7 +544,9 @@ class ControllerToClientHeader {
   void set_o_seq (uint32 seq) { o_seq_ = seq;}
   uint32 o_seq() const { return o_seq_; }
 
+  void set_type (char type) { type_ = type; }
   char type() const { return type_; }
+
  private:
   char type_;
   int client_id_;
@@ -574,16 +577,18 @@ class AckHeader {
 
   void set_num_pkts(uint16 num_pkts) { num_pkts_ = num_pkts; }
 
-  void set_ids(int client_id, int radio_id) { client_id_ = client_id; radio_id_ = radio_id; }
+  void set_ids(int client_id, int bs_id) { client_id_ = client_id; bs_id_ = bs_id; }
+  int client_id() const { return client_id_; }
+  int bs_id() const { return bs_id_; }
 // Data
   char type_;
-  uint32 ack_seq_;          // Record the sequence number of ack 
   uint16 num_nacks_;        // number of nacks in the packet
+  uint16 num_pkts_;         // Total number of packets included in this ack.
+  uint32 ack_seq_;          // Record the sequence number of ack 
   uint32 start_nack_seq_;   // Starting sequence number of nack
   uint32 end_seq_;          // The end of this ack window - could be a good pkt or a bad pkt 
-  uint16 num_pkts_;         // Total number of packets included in this ack.
   int client_id_;
-  int radio_id_;
+  int bs_id_;
 }; 
 
 class GPSHeader {
@@ -632,7 +637,7 @@ class AckPkt {
 
   void PushNack(uint32 seq);
 
-  void ParseNack(char *type, uint32 *ack_seq, uint16 *num_nacks, uint32 *end_seq, int* client_id, int* radio_id, uint32 *seq_arr, uint16 *num_pkts=NULL);
+  void ParseNack(char *type, uint32 *ack_seq, uint16 *num_nacks, uint32 *end_seq, int* client_id, int* bs_id, uint32 *seq_arr, uint16 *num_pkts=NULL);
 
   uint16 GetLen() {
     uint16 len = sizeof(ack_hdr_) + sizeof(rel_seq_arr_[0]) * ack_hdr_.num_nacks_;
@@ -652,7 +657,7 @@ class AckPkt {
 
   void set_num_pkts(uint16 num_pkts) { ack_hdr_.set_num_pkts(num_pkts); }
 
-  void set_ids(int client_id, int radio_id) { ack_hdr_.set_ids(client_id, radio_id); }
+  void set_ids(int client_id, int bs_id) { ack_hdr_.set_ids(client_id, bs_id); }
  private:
   AckHeader& ack_hdr() { return ack_hdr_; }
 
