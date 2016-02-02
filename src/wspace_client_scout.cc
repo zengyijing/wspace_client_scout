@@ -7,6 +7,11 @@ using namespace std;
 
 int main(int argc, char **argv) {
   printf("PKT_SIZE: %d\n", PKT_SIZE);
+  printf("ACK header size: %d\n", ACK_HEADER_SIZE);
+  printf("sizeof(ControllerToClientHeader):%d\n", sizeof(ControllerToClientHeader));
+  printf("sizeof(CellDataHeader):%d\n", sizeof(CellDataHeader));
+  printf("sizeof(double):%d\n",sizeof(double));
+  printf("sizeof(int):%d\n",sizeof(int));
   const char* args = "T:B:i:I:S:s:C:A:p:n:hd:r:";
   wspace_client = new WspaceClient(argc, argv, args);
   wspace_client->Init();
@@ -324,11 +329,11 @@ void* WspaceClient::RxCreateDataAck(void* arg) {
     usleep(ack_time_out_*1000);
     radio_context_tbl_[*radio_id]->data_pkt_buf()->FindNackSeqNum(block_time_, ACK_WINDOW, radio_context_tbl_[*radio_id]->batch_info(), nack_seq_arr, end_seq);
     ack_pkt->Init(DATA_ACK);  /** Data ack for retransmission. */
-    ack_pkt->set_ids(tun_.client_id_, 0);
     for (vector<uint32>::iterator it = nack_seq_arr.begin(); it != nack_seq_arr.end(); it++)
       ack_pkt->PushNack(*it);
     ack_pkt->set_end_seq(end_seq);
     radio_context_tbl_[*radio_id]->batch_info()->GetBSId(&bs_id);
+    ack_pkt->set_ids(tun_.client_id_, bs_id);
     //printf("Send Data Ack to bs_id:%d\n", bs_id);
     tun_.Write(Tun::kCellular, (char*)ack_pkt, ack_pkt->GetLen(), bs_id);
 #ifdef WRT_DEBUG
@@ -351,7 +356,6 @@ void* WspaceClient::RxCreateRawAck(void* arg) {
   printf("RxCreateRawAck start, radio_id:%d\n", *radio_id);
   while (1) {
     ack_pkt->Init(ack_type);
-    ack_pkt->set_ids(tun_.client_id_, *radio_id);
     radio_context_tbl_[*radio_id]->raw_pkt_buf()->PopPktStatus(nack_vec, &end_seq, &num_pkts, &bs_id, (uint32)min_pkt_cnt_);
     for (it = nack_vec.begin(); it != nack_vec.end(); it++) {
       ack_pkt->PushNack(*it);
@@ -361,6 +365,7 @@ void* WspaceClient::RxCreateRawAck(void* arg) {
     }
     ack_pkt->set_end_seq(end_seq);
     ack_pkt->set_num_pkts(num_pkts);
+    ack_pkt->set_ids(tun_.client_id_, bs_id);
     //printf("Send Raw Ack to bs_id:%d\n", bs_id);
     tun_.Write(Tun::kCellular, (char*)ack_pkt, ack_pkt->GetLen(), bs_id);
     //ack_pkt->Print();
