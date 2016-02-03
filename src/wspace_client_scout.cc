@@ -335,7 +335,8 @@ void* WspaceClient::RxCreateDataAck(void* arg) {
     radio_context_tbl_[*radio_id]->batch_info()->GetBSId(&bs_id);
     ack_pkt->set_ids(tun_.client_id_, bs_id);
     //printf("Send Data Ack to bs_id:%d\n", bs_id);
-    tun_.Write(Tun::kCellular, (char*)ack_pkt, ack_pkt->GetLen(), bs_id);
+    //tun_.Write(Tun::kCellular, (char*)ack_pkt, ack_pkt->GetLen(), bs_id);
+    tun_.Write(Tun::kController, (char*)ack_pkt, ack_pkt->GetLen(), 0);
 #ifdef WRT_DEBUG
     ack_pkt->Print();
 #endif
@@ -367,7 +368,8 @@ void* WspaceClient::RxCreateRawAck(void* arg) {
     ack_pkt->set_num_pkts(num_pkts);
     ack_pkt->set_ids(tun_.client_id_, bs_id);
     //printf("Send Raw Ack to bs_id:%d\n", bs_id);
-    tun_.Write(Tun::kCellular, (char*)ack_pkt, ack_pkt->GetLen(), bs_id);
+    //tun_.Write(Tun::kCellular, (char*)ack_pkt, ack_pkt->GetLen(), bs_id);
+    tun_.Write(Tun::kController, (char*)ack_pkt, ack_pkt->GetLen(), 0);
     //ack_pkt->Print();
   }
   delete ack_pkt;
@@ -395,9 +397,10 @@ void* WspaceClient::RxParseGPS(void* arg) {
     if (is_available) {
       gps_hdr.Init(gps_parser_.time(), gps_parser_.location().latitude, 
           gps_parser_.location().longitude, gps_parser_.speed(), tun_.client_id_);
-      for(vector<int>::iterator it = bs_ids_.begin(); it != bs_ids_.begin(); ++it) {
-        tun_.Write(Tun::kCellular, (char*)&gps_hdr, GPS_HEADER_SIZE, *it);
-      }
+      //for(vector<int>::iterator it = bs_ids_.begin(); it != bs_ids_.begin(); ++it) {
+      //  tun_.Write(Tun::kCellular, (char*)&gps_hdr, GPS_HEADER_SIZE, *it);
+      //}
+      tun_.Write(Tun::kController, (char*)&gps_hdr, GPS_HEADER_SIZE, 0);
       //gps_logger.LogGPSInfo(gps_hdr);
     }
   }
