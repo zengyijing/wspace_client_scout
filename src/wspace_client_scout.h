@@ -48,7 +48,7 @@ class RadioContext {
 class WspaceClient {
  public:
   WspaceClient(int argc, char *argv[], const char *optstring);
-  ~WspaceClient() {}
+  ~WspaceClient();
   
   void* RxRcvAth(void* arg);
 

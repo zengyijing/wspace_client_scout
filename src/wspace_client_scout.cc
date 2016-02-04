@@ -36,10 +36,6 @@ int main(int argc, char **argv) {
     Pthread_join(*(wspace_client->radio_context_tbl_[*it]->p_rx_create_data_ack()), NULL);
   }
 
-  for (vector<int>::iterator it = wspace_client->tun_.radio_ids_.begin(); it != wspace_client->tun_.radio_ids_.end(); ++it) {
-    delete wspace_client->radio_context_tbl_[*it];
-  }
-
   delete wspace_client;
   return 0;
 }
@@ -140,6 +136,12 @@ WspaceClient::WspaceClient(int argc, char *argv[], const char *optstring)
   }
   if(tun_.radio_ids_.size() > MAX_RADIO) {
     Perror("Need to revise 901-base.patch to enable more radios!\n");
+  }
+}
+
+WspaceClient::~WspaceClient() {
+  for (vector<int>::iterator it =tun_.radio_ids_.begin(); it != tun_.radio_ids_.end(); ++it) {
+    delete radio_context_tbl_[*it];
   }
 }
 
