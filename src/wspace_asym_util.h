@@ -64,7 +64,7 @@
 #define SLOT_TIME 9
 
 //#define TEST
-//#define RAND_DROP
+#define RAND_DROP
 //#define WRT_DEBUG
 
 typedef unsigned char uint8;
@@ -477,11 +477,11 @@ class AthHeader {
   char type_;
   uint32 raw_seq_;
   uint16 rate_;
+  int bs_id_;
+  int client_id_;
 #ifdef RAND_DROP
   bool is_good_;
 #endif
-  int bs_id_;
-  int client_id_;
 };
 
 class AthDataHeader : public AthHeader {
