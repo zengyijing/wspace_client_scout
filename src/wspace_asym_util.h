@@ -26,8 +26,8 @@
 #define ATH_DATA 1
 #define ATH_CODE 2
 #define DATA_ACK 3
-#define RAW_FRONT_ACK 4
-#define RAW_BACK_ACK 5
+#define ATH_PROBE 4
+#define RAW_ACK 5
 #define CELL_DATA 6
 #define GPS 7
 #define BS_STATS 8
@@ -64,8 +64,8 @@
 #define SLOT_TIME 9
 
 //#define TEST
-//#define RAND_DROP
-#define WRT_DEBUG
+#define RAND_DROP
+//#define WRT_DEBUG
 
 typedef unsigned char uint8;
 typedef unsigned short uint16;
@@ -339,13 +339,13 @@ class BatchInfo {
   /**
    * Note: locking is included.
    */
-  void SetBatchInfo(uint32 batch_id, uint32 seq, bool decoding_done, int ind, int n, uint32 pkt_duration);
+  void SetBatchInfo(uint32 batch_id, uint32 seq, bool decoding_done, int ind, int n, uint32 pkt_duration, int bs_id);
 
   /**
    * Note: locking is included.
    */
   void GetBatchInfo(uint32 *seq, bool *decoding_done);
-
+  void GetBSId(int* bs_id);
   /**
    * Note: locking is included.
    */
@@ -377,6 +377,7 @@ class BatchInfo {
   TIME cur_recv_time_;   /** The time to receive the current packet.*/
   double time_left_;     /** Duration left to finish receiving the current batch(in us). */
   pthread_mutex_t lock_;
+  int bs_id_;
 };
 
 class RxDataBuf: public BasicBuf {
@@ -440,7 +441,7 @@ class RxDataBuf: public BasicBuf {
    * @param [out] nack_seq_arr: Array of sequence numbers to be nacked.
    * @param [out] end_seq: The sequence number of the last good packet.
    */
-  void FindNackSeqNum(int block_time, int max_num_nacks, BatchInfo &batch_info, 
+  void FindNackSeqNum(int block_time, int max_num_nacks, BatchInfo* batch_info, 
         std::vector<uint32> &nack_seq_arr, uint32 &end_seq);
 
   void set_highest_decoded_seq(uint32 seq); 
@@ -458,7 +459,7 @@ class AthHeader {
  public:
   AthHeader() {}
   ~AthHeader() {}
-  AthHeader(char type, uint16 rate) : type_(type), raw_seq_(0), rate_(rate) {}
+  AthHeader(char type, uint16 rate) : type_(type), raw_seq_(0), rate_(rate), bs_id_(0), client_id_(0) {}
 
   uint16 GetRate();
   void SetRate(uint16 rate);
@@ -471,10 +472,13 @@ class AthHeader {
   void set_is_good(bool is_good) { is_good_ = is_good; } 
 #endif
 
+  void set_bs_id(int bs_id) { bs_id_ = bs_id; }
 // Data
   char type_;
   uint32 raw_seq_;
   uint16 rate_;
+  int bs_id_;
+  int client_id_;
 #ifdef RAND_DROP
   bool is_good_;
 #endif
@@ -496,9 +500,10 @@ class AthCodeHeader : public AthHeader {
  public:
   AthCodeHeader() : AthHeader(ATH_CODE, ATH5K_RATE_CODE_6M), start_seq_(0), ind_(0), k_(0), n_(0) {}
   ~AthCodeHeader() {}
-  void SetHeader(uint32 batch_id, uint32 start_seq, char type, int ind, int k, int n, const uint16 *len_arr);
+  void SetHeader(uint32 batch_id, uint32 start_seq, char type, int ind, int k,
+                 int n, const uint16 *len_arr, int bs_id, int client_id);
   void SetInd(uint8 ind) { ind_ = ind; }
-  void ParseHeader(uint32 *batch_id, uint32 *start_seq, int *ind, int *k, int *n) const;  
+  void ParseHeader(uint32 *batch_id, uint32 *start_seq, int *ind, int *k, int *n, int *bs_id, int *client_id) const;  
   /** Should copy the len_arr to somewhere. */
   uint16* lens() {
     assert(k_ > 0);
@@ -535,11 +540,17 @@ class ControllerToClientHeader {
 
   void set_client_id (int id) { client_id_ = id; }
   int client_id() const { return client_id_; }
+
+  void set_o_seq (uint32 seq) { o_seq_ = seq;}
+  uint32 o_seq() const { return o_seq_; }
+
+  void set_type (char type) { type_ = type; }
   char type() const { return type_; }
 
  private:
   char type_;
   int client_id_;
+  uint32 o_seq_;
 };
 
 class AckHeader {
@@ -566,13 +577,18 @@ class AckHeader {
 
   void set_num_pkts(uint16 num_pkts) { num_pkts_ = num_pkts; }
 
+  void set_ids(int client_id, int bs_id) { client_id_ = client_id; bs_id_ = bs_id; }
+  int client_id() const { return client_id_; }
+  int bs_id() const { return bs_id_; }
 // Data
   char type_;
-  uint32 ack_seq_;          // Record the sequence number of ack 
   uint16 num_nacks_;        // number of nacks in the packet
+  uint16 num_pkts_;         // Total number of packets included in this ack.
+  uint32 ack_seq_;          // Record the sequence number of ack 
   uint32 start_nack_seq_;   // Starting sequence number of nack
   uint32 end_seq_;          // The end of this ack window - could be a good pkt or a bad pkt 
-  uint16 num_pkts_;         // Total number of packets included in this ack.
+  int client_id_;
+  int bs_id_;
 }; 
 
 class GPSHeader {
@@ -580,10 +596,10 @@ class GPSHeader {
   GPSHeader() : type_(GPS), seq_(0), speed_(-1.0) {}
   ~GPSHeader() {}
 
-  void Init(double time, double latitude, double longitude, double speed);
+  void Init(double time, double latitude, double longitude, double speed, int client_id);
 
   uint32 seq() const { assert(seq_ > 0); return seq_; }
-
+  int client_id() const { return client_id_; }
   double speed() const { assert(speed_ >= 0); return speed_; }
 
  private: 
@@ -594,7 +610,8 @@ class GPSHeader {
   double time_;
   double latitude_;
   double longitude_;
-  double speed_; 
+  double speed_;
+  int client_id_;
 };
 
 class GPSLogger {
@@ -620,7 +637,7 @@ class AckPkt {
 
   void PushNack(uint32 seq);
 
-  void ParseNack(char *type, uint32 *ack_seq, uint16 *num_nacks, uint32 *end_seq, uint32 *seq_arr, uint16 *num_pkts=NULL);
+  void ParseNack(char *type, uint32 *ack_seq, uint16 *num_nacks, uint32 *end_seq, int* client_id, int* bs_id, uint32 *seq_arr, uint16 *num_pkts=NULL);
 
   uint16 GetLen() {
     uint16 len = sizeof(ack_hdr_) + sizeof(rel_seq_arr_[0]) * ack_hdr_.num_nacks_;
@@ -640,6 +657,7 @@ class AckPkt {
 
   void set_num_pkts(uint16 num_pkts) { ack_hdr_.set_num_pkts(num_pkts); }
 
+  void set_ids(int client_id, int bs_id) { ack_hdr_.set_ids(client_id, bs_id); }
  private:
   AckHeader& ack_hdr() { return ack_hdr_; }
 
@@ -689,7 +707,7 @@ class RawPktRcvStatus {
  */
 class RxRawBuf {
  public:
-  RxRawBuf() : end_seq_(INVALID_SEQ_NUM), max_send_cnt_(1), pkt_cnt_(0), kMaxBufSize(ACK_WINDOW) { 
+  RxRawBuf() : end_seq_(INVALID_SEQ_NUM), max_send_cnt_(1), pkt_cnt_(0), kMaxBufSize(ACK_WINDOW), bs_id_(0) { 
     assert(max_send_cnt_ > 0);
     nack_deq_.clear();
     Pthread_mutex_init(&lock_, NULL);
@@ -708,7 +726,7 @@ class RxRawBuf {
    * @param [in] good_seq the sequence number of the current packet received.
    * @return true - insertion succeeds, false - out of order packets.
    */
-  bool PushPkts(uint32 cur_seq, bool is_cur_good);
+  bool PushPkts(uint32 cur_seq, bool is_cur_good, int bs_id);
   
   /**
    * Return the sequence number of lost packets with send_cnt < max_send_cnt, 
@@ -718,7 +736,7 @@ class RxRawBuf {
    * @param [out] nack_seq_vec: Vector of sequence numbers of loss packets for NACK.
    * @param [out] good_seq: Highest sequence number of the good packet received. 
    */
-  void PopPktStatus(std::vector<uint32> &seq_vec, uint32 *good_seq, uint16 *num_pkts, uint32 min_pkt_cnt = 10);
+  void PopPktStatus(std::vector<uint32> &seq_vec, uint32 *good_seq, uint16 *num_pkts, int *bs_id, uint32 min_pkt_cnt = 10);
 
   /**
    * Print out the status of each raw packet.
@@ -743,6 +761,7 @@ class RxRawBuf {
   uint32 pkt_cnt_;          /** Number of raw packets which have been curently logged. */
   pthread_mutex_t lock_;    /** Lock is needed because the bit map is access by two threads. */
   pthread_cond_t fill_cond_;  /** There are raw acks filled in. */
+  int bs_id_; /* record the bs id of last received raw pkt*/
 };
 
 void PrintPkt(char *pkt, uint16 len);

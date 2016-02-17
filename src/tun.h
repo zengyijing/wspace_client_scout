@@ -28,19 +28,18 @@
 #define PORT_ETH 55554
 #define PORT_ATH 55555
 #define PORT_RELAY 55556
+#define MAX_RADIO 3
 
 class Tun {
  public:
   enum IOType {
     kTun=1,
-    kFrontWspace,
-    kBackWspace, 
+    kWspace, 
     kCellular,
     kController, 
   };
 
-  Tun(): tun_type_(IFF_TUN), port_eth_(PORT_ETH), 
-         port_ath_(PORT_ATH), port_relay_(PORT_RELAY)  {
+  Tun(): tun_type_(IFF_TUN), port_eth_(PORT_ETH) {
     if_name_[0] = '\0';
     controller_ip_eth_[0] = '\0';
     client_id_ = 0;
@@ -49,10 +48,11 @@ class Tun {
   ~Tun() {
     close(tun_fd_);
     close(sock_fd_eth_);
-    close(sock_fd_ath_);
+    for (map<int, uint16_t>::iterator it = sock_fd_ath_tbl_.begin(); it != sock_fd_ath_tbl_.end(); ++it)
+      close(it->second);
   }
   
-  void CreateConn();
+  void Init();
 
   void InitSock();
 
@@ -67,16 +67,16 @@ class Tun {
 
   void BindSocket(int fd, sockaddr_in *addr);
 
-  void BuildFDMap();
+  //void BuildFDMap();
 
-  int GetFD(const IOType &type);
+  //int GetFD(const IOType &type, int radio_id);
   
-  uint16_t Read(const IOType &type, char *buf, uint16_t len);
+  uint16_t Read(const IOType &type, char *buf, uint16_t len, int radio_id); // radio_id for Ath
 
   /**
    * Read from multiple interfaces.
    */
-  uint16_t Read(const std::vector<IOType> &type_arr, char *buf, uint16_t len, IOType *type_out);
+  //uint16_t Read(const std::vector<IOType> &type_arr, char *buf, uint16_t len, IOType *type_out, int *radio_id);
 
   uint16_t Write(const IOType &type, char *buf, uint16_t len, int bs_id);
 
@@ -86,13 +86,16 @@ class Tun {
   char if_name_[IFNAMSIZ];
   char controller_ip_eth_[16];
   int client_id_;
-  std::map<int, string> bs_ip_tbl_; // <bs_id, bs_ip_eth_>.
-  std::map<int, struct sockaddr_in> bs_addr_tbl_; // <bs_id, bs_addr>.
-  struct sockaddr_in client_addr_eth_, client_addr_ath_, controller_addr_eth_; 
-  uint16_t port_eth_, port_ath_, port_relay_;
-  int sock_fd_eth_, sock_fd_ath_;       // Sockets to handle request at the server side
-  UdpSocket relay_sock_;
-  std::map<IOType, int> fd_map_;
+  map<int, string> bs_ip_tbl_; // <bs_id, bs_ip_eth_>.
+  map<int, struct sockaddr_in> bs_addr_tbl_; // <bs_id, bs_addr_>.
+  struct sockaddr_in client_addr_eth_, controller_addr_eth_;
+  map<int, sockaddr_in> client_addr_ath_tbl_;  // <radio_id, client_addr_ath_>.
+  int port_eth_;
+  map<int, int> port_ath_tbl_; // <radio_id, port_ath_>.
+  uint16_t sock_fd_eth_;       // Sockets to handle request at the server side
+  map<int, uint16_t> sock_fd_ath_tbl_; // <radio_id, sock_fd_ath_>
+  vector<int> radio_ids_;
+  //map<IOType, map<int, int> > fd_map_; // <IOType, <radio_id, fd_>>. For IOType other than kWspace, use default radio_id 0.
 };
 
 int cread(int fd, char *buf, int n);

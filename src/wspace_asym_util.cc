@@ -253,7 +253,7 @@ bool RxDataBuf::DequeuePkt(uint16 *pkt_len, uint8 *pkt) {
       case kRead:
       
       case kDrop:
-        printf("<<<Drop pkt[%u]>>>\n", *seq_num);
+        //printf("<<<Drop pkt[%u]>>>\n", *seq_num);
         UpdateBookKeeping(index, 0, kEmpty, 0, 0, false);
         UnLockElement(index);
         IncrementHeadPt();
@@ -266,7 +266,7 @@ bool RxDataBuf::DequeuePkt(uint16 *pkt_len, uint8 *pkt) {
   return is_pkt_available;
 }
 
-void RxDataBuf::FindNackSeqNum(int block_time, int max_num_nacks, BatchInfo &batch_info, 
+void RxDataBuf::FindNackSeqNum(int block_time, int max_num_nacks, BatchInfo* batch_info, 
         vector<uint32> &nack_seq_arr, uint32 &end_seq) {
   uint32 index=0, head_pt=0, tail_pt=0, end_pt=0, seq_num=0, batch_id; 
   uint32 highest_decoded_seq = 0;  /** Highest decoded seq in the previous batch. */
@@ -277,7 +277,7 @@ void RxDataBuf::FindNackSeqNum(int block_time, int max_num_nacks, BatchInfo &bat
   bool decoding_done = false;
   static uint32 batch_id_prev = 0;
 
-  batch_info.GetBatchID(&batch_id);
+  batch_info->GetBatchID(&batch_id);
   LockQueue();
   //printf("FindNackSeqNum: LockQueue batch_id[%u] batch_id_prev[%u] head_pt[%u] tail_pt[%u]\n", 
   //batch_id, batch_id_prev, RxDataBuf::head_pt(), RxDataBuf::tail_pt());
@@ -292,7 +292,7 @@ void RxDataBuf::FindNackSeqNum(int block_time, int max_num_nacks, BatchInfo &bat
   tail_pt = RxDataBuf::tail_pt();
   UnLockQueue();
   nack_seq_arr.clear();
-  batch_info.GetBatchInfo(&highest_decoded_seq, &decoding_done);
+  batch_info->GetBatchInfo(&highest_decoded_seq, &decoding_done);
   end_pt = tail_pt - 1;
   //printf("FindNackSeqNum: GetBatchInfo head_pt[%u] tail_pt[%u] end_pt[%u] decoding_done[%d] highest_decoded_seq[%u]\n", 
   //head_pt, tail_pt, end_pt, decoding_done, highest_decoded_seq);
@@ -312,7 +312,7 @@ void RxDataBuf::FindNackSeqNum(int block_time, int max_num_nacks, BatchInfo &bat
   }  
   else  /** decoding the current batch is done.*/ {
     end_seq = (highest_decoded_seq > tail_pt) ? highest_decoded_seq : tail_pt;
-    batch_info.GetBatchID(&batch_id);
+    batch_info->GetBatchID(&batch_id);
     if (batch_id > batch_id_prev)  /** Start acking the current batch.*/
       batch_id_prev = batch_id;
   }
@@ -478,7 +478,8 @@ void AthDataHeader::ParseAthHdr(uint32 *seq_num, uint16 *len, char *rate) {
 }
 
 /** FEC vdm */
-void AthCodeHeader::SetHeader(uint32 batch_id, uint32 start_seq, char type, int ind, int k, int n, const uint16 *len_arr) {
+void AthCodeHeader::SetHeader(uint32 batch_id, uint32 start_seq, char type, int ind,
+                              int k, int n, const uint16 *len_arr, int bs_id, int client_id) {
   assert(batch_id > 0 && start_seq > 0 && ind >= 0 && ind < n && k >= 0 && n >= 0 && k <= n);
   batch_id_ = batch_id;
   type_ = type;
@@ -486,20 +487,25 @@ void AthCodeHeader::SetHeader(uint32 batch_id, uint32 start_seq, char type, int 
   ind_ = ind;
   k_ = k;
   n_ = n;
+  bs_id_ = bs_id;
+  client_id_ = client_id;
   memcpy((uint8*)this + ATH_CODE_HEADER_SIZE, len_arr, k_ * sizeof(uint16));
 }
 
-void AthCodeHeader::ParseHeader(uint32 *batch_id, uint32 *start_seq, int *ind, int *k, int *n) const {
+void AthCodeHeader::ParseHeader(uint32 *batch_id, uint32 *start_seq, int *ind,
+                                int *k, int *n, int *bs_id, int *client_id) const {
   assert(batch_id_ > 0 && start_seq_ > 0 && ind_ < n_ && k_ <= n_ && k_ > 0 && k_ <= MAX_BATCH_SIZE);
   *batch_id = batch_id_;
   *start_seq = start_seq_;
   *ind = ind_;
   *k = k_;
   *n = n_;
+  *bs_id = bs_id_;
+  *client_id = client_id_;
 }
 
 /** GPS Header.*/
-void GPSHeader::Init(double time, double latitude, double longitude, double speed) {
+void GPSHeader::Init(double time, double latitude, double longitude, double speed, int client_id) {
   assert(speed >= 0);
   seq_++;
   type_ = GPS;
@@ -507,6 +513,7 @@ void GPSHeader::Init(double time, double latitude, double longitude, double spee
   latitude_ = latitude;
   longitude_ = longitude;
   speed_ = speed;
+  client_id_ = client_id;
 }
 
 /** GPSLogger.*/
@@ -522,7 +529,7 @@ void GPSLogger::ConfigFile(const char* filename) {
     filename_ = filename;
     fp_ = fopen(filename_.c_str(), "w");
     assert(fp_);
-    fprintf(fp_, "###Seq\tTime\tLatitude\tLongitude\tSpeed\n");
+    fprintf(fp_, "###Seq\tTime\tLatitude\tLongitude\tSpeed\tClientID\n");
     fflush(fp_);
   }
   else {
@@ -533,7 +540,7 @@ void GPSLogger::ConfigFile(const char* filename) {
 void GPSLogger::LogGPSInfo(const GPSHeader &hdr) {
   if (fp_ == stdout)
     fprintf(fp_, "GPS pkt: ");
-  fprintf(fp_, "%d\t%.0f\t%.6f\t%.6f\t%.3f\n", hdr.seq_, hdr.time_, hdr.latitude_, hdr.longitude_, hdr.speed_);
+  fprintf(fp_, "%d\t%.0f\t%.6f\t%.6f\t%.3f\n", hdr.seq_, hdr.time_, hdr.latitude_, hdr.longitude_, hdr.speed_, hdr.client_id_);
   fflush(fp_);
 }
 
@@ -545,11 +552,13 @@ void GPSLogger::LogGPSInfo(const GPSHeader &hdr) {
  * @param [out] end_seq: Highest sequence number of the good packets.
  * @param [out] seq_arr: Array of sequence numbers of lost packets.
 */ 
-void AckPkt::ParseNack(char *type, uint32 *ack_seq, uint16 *num_nacks, uint32 *end_seq, uint32 *seq_arr, uint16 *num_pkts) {
+void AckPkt::ParseNack(char *type, uint32 *ack_seq, uint16 *num_nacks, uint32 *end_seq, int* client_id, int* bs_id, uint32 *seq_arr, uint16 *num_pkts) {
   *type = ack_hdr_.type_;
   *ack_seq = ack_hdr_.ack_seq_;
   *num_nacks = ack_hdr_.num_nacks_;
   *end_seq = ack_hdr_.end_seq_;
+  *client_id = ack_hdr_.client_id_;
+  *bs_id = ack_hdr_.bs_id_;
   if (num_pkts)
     *num_pkts = ack_hdr_.num_pkts_;
   for (int i = 0; i < ack_hdr_.num_nacks_; i++) {
@@ -562,48 +571,53 @@ void AckPkt::ParseNack(char *type, uint32 *ack_seq, uint16 *num_nacks, uint32 *e
  */ 
 void AckPkt::Print() {
   if (ack_hdr_.type_ == DATA_ACK)
-    printf("data_ack");
-  else if (ack_hdr_.type_ == RAW_FRONT_ACK)
-    printf("raw_front_ack");
+    printf("data_ack:");
   else
-    printf("raw_back_ack");
-  printf("[%u] end_seq[%u] num_nacks[%u] num_pkts[%u] {", 
-  ack_hdr_.ack_seq_, ack_hdr_.end_seq_, ack_hdr_.num_nacks_, ack_hdr_.num_pkts_);
+    printf("raw_ack:");
+  printf("client_id[%d] bs_id[%d] seq[%u] end_seq[%u] num_nacks[%u] num_pkts[%u] {", 
+      ack_hdr_.client_id_, ack_hdr_.bs_id_, ack_hdr_.ack_seq_, ack_hdr_.end_seq_, ack_hdr_.num_nacks_, ack_hdr_.num_pkts_);
   for (int i = 0; i < ack_hdr_.num_nacks_; i++) {
     printf("%u ", ack_hdr_.start_nack_seq_ + rel_seq_arr_[i]);
   }
   printf("}\n");
 }
 
-bool RxRawBuf::PushPkts(uint32 cur_seq, bool is_cur_good) {
+bool RxRawBuf::PushPkts(uint32 cur_seq, bool is_cur_good, int bs_id) {
   Lock();
-  if (cur_seq <= end_seq_) {  /** Receive out of order packets.*/
-    /** This shouldn't happen at raw packets over wireless. */
-    UnLock();
-    return false;  
-  }
-  //printf("--Push good seq[%u] end_seq[%u]\n", cur_seq, end_seq_);
-  if (cur_seq - end_seq_ <= kMaxBufSize - pkt_cnt_) {
-    for (uint32 i = end_seq_+1; i < cur_seq; i++) {
-      nack_deq_.push_back(RawPktRcvStatus(i, 0));
+  if (bs_id_ == bs_id) { // When this radio is still served by the same bs
+    if (cur_seq <= end_seq_) {  /** Receive out of order packets.*/
+      /** This shouldn't happen at raw packets over wireless. */
+      UnLock();
+      return false;  
     }
-    pkt_cnt_ += (cur_seq - end_seq_); 
-  }
-  else {
-    printf("RxRawBuf: Warning: RxRawBuf Full! end_seq[%u] cur_seq[%u] pkt_cnt[%u]\n", 
-    end_seq_, cur_seq, pkt_cnt_);
+    //printf("--Push good seq[%u] end_seq[%u] bs_id[%d]\n", cur_seq, end_seq_, bs_id);
+    if (cur_seq - end_seq_ <= kMaxBufSize - pkt_cnt_) {
+      for (uint32 i = end_seq_+1; i < cur_seq; i++) {
+        nack_deq_.push_back(RawPktRcvStatus(i, 0));
+      }
+      pkt_cnt_ += (cur_seq - end_seq_);
+    } else {
+      /*printf("RxRawBuf: Warning: RxRawBuf Full! end_seq[%u] cur_seq[%u] pkt_cnt[%u]\n", 
+      end_seq_, cur_seq, pkt_cnt_);*/
+      nack_deq_.clear();
+      pkt_cnt_ = 1;
+    }
+    if (!is_cur_good) {
+      nack_deq_.push_back(RawPktRcvStatus(cur_seq, 0));
+    }
+    end_seq_ = cur_seq;
+    SignalFill();
+  } else { // Initialization or serving bs has changed
+    bs_id_ = bs_id;
     nack_deq_.clear();
-    pkt_cnt_ = 1;
+    pkt_cnt_ = 0;
+    end_seq_ = cur_seq;
   }
-  if (!is_cur_good)
-    nack_deq_.push_back(RawPktRcvStatus(cur_seq, 0));
-  end_seq_ = cur_seq;
-  SignalFill();
   UnLock();
   return true;
 }
 
-void RxRawBuf::PopPktStatus(vector<uint32> &seq_vec, uint32 *good_seq, uint16 *num_pkts, uint32 min_pkt_cnt) {
+void RxRawBuf::PopPktStatus(vector<uint32> &seq_vec, uint32 *good_seq, uint16 *num_pkts, int *bs_id, uint32 min_pkt_cnt) {
   deque<RawPktRcvStatus>::iterator it;
   seq_vec.clear();
   Lock();
@@ -623,6 +637,7 @@ void RxRawBuf::PopPktStatus(vector<uint32> &seq_vec, uint32 *good_seq, uint16 *n
   nack_deq_.erase(nack_deq_.begin(), it);
   *num_pkts = pkt_cnt_;
   pkt_cnt_ = 0;
+  *bs_id = bs_id_;
   UnLock();
 }
 
@@ -652,11 +667,12 @@ BatchInfo::~BatchInfo() {
   Pthread_mutex_destroy(&lock_);
 }
 
-void BatchInfo::SetBatchInfo(uint32 batch_id, uint32 seq, bool decoding_done, int ind, int n, uint32 pkt_duration) {
+void BatchInfo::SetBatchInfo(uint32 batch_id, uint32 seq, bool decoding_done, int ind, int n, uint32 pkt_duration, int bs_id) {
   Lock();
   batch_id_ = batch_id;
   highest_decoded_seq_ = seq; 
   decoding_done_ = decoding_done;
+  bs_id_ = bs_id;
   UpdateTimeLeft(ind, n, pkt_duration, false/*don't lock*/);
   UnLock();
 }
@@ -665,6 +681,12 @@ void BatchInfo::GetBatchInfo(uint32 *seq, bool *is_decoding_done) {
   Lock();
   *seq = highest_decoded_seq_;
   *is_decoding_done = decoding_done(false);
+  UnLock();
+}
+
+void BatchInfo::GetBSId(int* bs_id) {
+  Lock();
+  *bs_id = bs_id_;
   UnLock();
 }
 
