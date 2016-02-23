@@ -59,6 +59,19 @@ void OriginalSeqContext::set_max_seq(uint32 seq) {
   UnLock();
 }
 
+int RadioContext::bs_id() {
+  Lock();
+  int bs_id = bs_id_;
+  UnLock();
+  return bs_id;
+}
+
+void RadioContext::set_bs_id(int bs_id) {
+  Lock();
+  bs_id_ = bs_id;
+  UnLock();
+}
+
 WspaceClient::WspaceClient(int argc, char *argv[], const char *optstring) 
     : min_pkt_cnt_(30) {
   int option;

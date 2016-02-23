@@ -10,7 +10,7 @@
 
 class OriginalSeqContext {
  public:
-  OriginalSeqContext(): max_seq_(0){};
+  OriginalSeqContext(): max_seq_(0) { Pthread_mutex_init(&lock_, NULL); }
   ~OriginalSeqContext() { Pthread_mutex_destroy(&lock_); }
   
   bool need_update(uint32 cmp_seq);
@@ -19,14 +19,15 @@ class OriginalSeqContext {
  private:
   void Lock() { Pthread_mutex_lock(&lock_); }
   void UnLock() { Pthread_mutex_unlock(&lock_); }
+
   uint32 max_seq_;
   pthread_mutex_t lock_;
 };
 
 class RadioContext {
  public:
-  RadioContext(): decoder_(CodeInfo::kDecoder, MAX_BATCH_SIZE, PKT_SIZE), bs_id_(0) {};
-  ~RadioContext() {}
+  RadioContext(): decoder_(CodeInfo::kDecoder, MAX_BATCH_SIZE, PKT_SIZE), bs_id_(0) { Pthread_mutex_init(&lock_, NULL); }
+  ~RadioContext() { Pthread_mutex_destroy(&lock_); }
 
   RxRawBuf* raw_pkt_buf() { return &raw_pkt_buf_; }
   RxDataBuf* data_pkt_buf() { return &data_pkt_buf_; }
@@ -36,16 +37,20 @@ class RadioContext {
   pthread_t* p_rx_write_tun() { return &p_rx_write_tun_; }
   pthread_t* p_rx_create_data_ack() { return &p_rx_create_data_ack_; }
   pthread_t* p_rx_create_raw_ack() { return &p_rx_create_raw_ack_; }
-  int bs_id() { return bs_id_; }
-  void set_bs_id(int bs_id) { bs_id_ = bs_id; }
+  int bs_id();
+  void set_bs_id(int bs_id);
 
  private:
+  void Lock() { Pthread_mutex_lock(&lock_); }
+  void UnLock() { Pthread_mutex_unlock(&lock_); }
+
   int bs_id_;
   RxRawBuf raw_pkt_buf_;
   RxDataBuf data_pkt_buf_;
   CodeInfo decoder_;
   BatchInfo batch_info_;
   pthread_t p_rx_rcv_ath_, p_rx_write_tun_, p_rx_create_data_ack_, p_rx_create_raw_ack_; 
+  pthread_mutex_t lock_;
 };
 
 class WspaceClient {
