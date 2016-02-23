@@ -339,13 +339,12 @@ class BatchInfo {
   /**
    * Note: locking is included.
    */
-  void SetBatchInfo(uint32 batch_id, uint32 seq, bool decoding_done, int ind, int n, uint32 pkt_duration, int bs_id);
+  void SetBatchInfo(uint32 batch_id, uint32 seq, bool decoding_done, int ind, int n, uint32 pkt_duration);
 
   /**
    * Note: locking is included.
    */
   void GetBatchInfo(uint32 *seq, bool *decoding_done);
-  void GetBSId(int* bs_id);
   /**
    * Note: locking is included.
    */
@@ -377,7 +376,6 @@ class BatchInfo {
   TIME cur_recv_time_;   /** The time to receive the current packet.*/
   double time_left_;     /** Duration left to finish receiving the current batch(in us). */
   pthread_mutex_t lock_;
-  int bs_id_;
 };
 
 class RxDataBuf: public BasicBuf {
@@ -708,7 +706,7 @@ class RawPktRcvStatus {
  */
 class RxRawBuf {
  public:
-  RxRawBuf() : end_seq_(INVALID_SEQ_NUM), max_send_cnt_(1), pkt_cnt_(0), kMaxBufSize(ACK_WINDOW), bs_id_(0) { 
+  RxRawBuf() : end_seq_(INVALID_SEQ_NUM), max_send_cnt_(1), pkt_cnt_(0), kMaxBufSize(ACK_WINDOW) { 
     assert(max_send_cnt_ > 0);
     nack_deq_.clear();
     Pthread_mutex_init(&lock_, NULL);
@@ -727,7 +725,7 @@ class RxRawBuf {
    * @param [in] good_seq the sequence number of the current packet received.
    * @return true - insertion succeeds, false - out of order packets.
    */
-  bool PushPkts(uint32 cur_seq, bool is_cur_good, int bs_id);
+  bool PushPkts(uint32 cur_seq, bool is_cur_good);
   
   /**
    * Return the sequence number of lost packets with send_cnt < max_send_cnt, 
@@ -737,7 +735,7 @@ class RxRawBuf {
    * @param [out] nack_seq_vec: Vector of sequence numbers of loss packets for NACK.
    * @param [out] good_seq: Highest sequence number of the good packet received. 
    */
-  void PopPktStatus(std::vector<uint32> &seq_vec, uint32 *good_seq, uint16 *num_pkts, int *bs_id, uint32 min_pkt_cnt = 10);
+  void PopPktStatus(std::vector<uint32> &seq_vec, uint32 *good_seq, uint16 *num_pkts, uint32 min_pkt_cnt = 10);
 
   /**
    * Print out the status of each raw packet.
@@ -762,7 +760,6 @@ class RxRawBuf {
   uint32 pkt_cnt_;          /** Number of raw packets which have been curently logged. */
   pthread_mutex_t lock_;    /** Lock is needed because the bit map is access by two threads. */
   pthread_cond_t fill_cond_;  /** There are raw acks filled in. */
-  int bs_id_; /* record the bs id of last received raw pkt*/
 };
 
 void PrintPkt(char *pkt, uint16 len);

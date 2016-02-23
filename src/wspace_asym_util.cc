@@ -582,42 +582,36 @@ void AckPkt::Print() {
   printf("}\n");
 }
 
-bool RxRawBuf::PushPkts(uint32 cur_seq, bool is_cur_good, int bs_id) {
+bool RxRawBuf::PushPkts(uint32 cur_seq, bool is_cur_good) {
   Lock();
-  if (bs_id_ == bs_id) { // When this radio is still served by the same bs
-    if (cur_seq <= end_seq_) {  /** Receive out of order packets.*/
-      /** This shouldn't happen at raw packets over wireless. */
-      UnLock();
-      return false;  
-    }
-    //printf("--Push good seq[%u] end_seq[%u] bs_id[%d]\n", cur_seq, end_seq_, bs_id);
-    if (cur_seq - end_seq_ <= kMaxBufSize - pkt_cnt_) {
-      for (uint32 i = end_seq_+1; i < cur_seq; i++) {
-        nack_deq_.push_back(RawPktRcvStatus(i, 0));
-      }
-      pkt_cnt_ += (cur_seq - end_seq_);
-    } else {
-      /*printf("RxRawBuf: Warning: RxRawBuf Full! end_seq[%u] cur_seq[%u] pkt_cnt[%u]\n", 
-      end_seq_, cur_seq, pkt_cnt_);*/
-      nack_deq_.clear();
-      pkt_cnt_ = 1;
-    }
-    if (!is_cur_good) {
-      nack_deq_.push_back(RawPktRcvStatus(cur_seq, 0));
-    }
-    end_seq_ = cur_seq;
-    SignalFill();
-  } else { // Initialization or serving bs has changed
-    bs_id_ = bs_id;
-    nack_deq_.clear();
-    pkt_cnt_ = 0;
-    end_seq_ = cur_seq;
+  if (cur_seq <= end_seq_) {  /** Receive out of order packets.*/
+    /** This shouldn't happen at raw packets over wireless. */
+    UnLock();
+    return false;  
   }
+  //printf("--Push good seq[%u] end_seq[%u] bs_id[%d]\n", cur_seq, end_seq_, bs_id);
+  if (cur_seq - end_seq_ <= kMaxBufSize - pkt_cnt_) {
+    for (uint32 i = end_seq_+1; i < cur_seq; i++) {
+      nack_deq_.push_back(RawPktRcvStatus(i, 0));
+    }
+    pkt_cnt_ += (cur_seq - end_seq_);
+  } else {
+    /*printf("RxRawBuf: Warning: RxRawBuf Full! end_seq[%u] cur_seq[%u] pkt_cnt[%u]\n", 
+    end_seq_, cur_seq, pkt_cnt_);*/
+    nack_deq_.clear();
+    pkt_cnt_ = 1;
+  }
+  if (!is_cur_good) {
+    nack_deq_.push_back(RawPktRcvStatus(cur_seq, 0));
+  }
+  end_seq_ = cur_seq;
+  SignalFill();
+
   UnLock();
   return true;
 }
 
-void RxRawBuf::PopPktStatus(vector<uint32> &seq_vec, uint32 *good_seq, uint16 *num_pkts, int *bs_id, uint32 min_pkt_cnt) {
+void RxRawBuf::PopPktStatus(vector<uint32> &seq_vec, uint32 *good_seq, uint16 *num_pkts, uint32 min_pkt_cnt) {
   deque<RawPktRcvStatus>::iterator it;
   seq_vec.clear();
   Lock();
@@ -637,7 +631,6 @@ void RxRawBuf::PopPktStatus(vector<uint32> &seq_vec, uint32 *good_seq, uint16 *n
   nack_deq_.erase(nack_deq_.begin(), it);
   *num_pkts = pkt_cnt_;
   pkt_cnt_ = 0;
-  *bs_id = bs_id_;
   UnLock();
 }
 
@@ -667,12 +660,11 @@ BatchInfo::~BatchInfo() {
   Pthread_mutex_destroy(&lock_);
 }
 
-void BatchInfo::SetBatchInfo(uint32 batch_id, uint32 seq, bool decoding_done, int ind, int n, uint32 pkt_duration, int bs_id) {
+void BatchInfo::SetBatchInfo(uint32 batch_id, uint32 seq, bool decoding_done, int ind, int n, uint32 pkt_duration) {
   Lock();
   batch_id_ = batch_id;
   highest_decoded_seq_ = seq; 
   decoding_done_ = decoding_done;
-  bs_id_ = bs_id;
   UpdateTimeLeft(ind, n, pkt_duration, false/*don't lock*/);
   UnLock();
 }
@@ -681,12 +673,6 @@ void BatchInfo::GetBatchInfo(uint32 *seq, bool *is_decoding_done) {
   Lock();
   *seq = highest_decoded_seq_;
   *is_decoding_done = decoding_done(false);
-  UnLock();
-}
-
-void BatchInfo::GetBSId(int* bs_id) {
-  Lock();
-  *bs_id = bs_id_;
   UnLock();
 }
 
