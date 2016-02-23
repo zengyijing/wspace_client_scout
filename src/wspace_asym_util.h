@@ -473,6 +473,7 @@ class AthHeader {
 #endif
 
   void set_bs_id(int bs_id) { bs_id_ = bs_id; }
+  int bs_id() { return bs_id_; }
 // Data
   char type_;
   uint32 raw_seq_;

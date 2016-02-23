@@ -52,6 +52,8 @@ class WspaceClient {
   
   void* RxRcvAth(void* arg);
 
+  void* RxRcvCell(void* arg);
+
   void* RxWriteTun(void* arg);
 
   void* RxCreateDataAck(void* arg);
@@ -67,7 +69,7 @@ class WspaceClient {
 
 // Data member
   //RxDataBuf  data_pkt_buf_;  /** Store the data packets and the data sequence number for retransmission. */
-  pthread_t /*p_rx_rcv_ath_, p_rx_write_tun_, p_rx_create_data_ack_,*/ p_rx_send_cell_, p_rx_parse_gps_;
+  pthread_t /*p_rx_rcv_ath_, p_rx_write_tun_, p_rx_create_data_ack_,*/ p_rx_send_cell_, p_rx_rcv_cell_, p_rx_parse_gps_;
   //map<int, pthread_t> p_rx_create_raw_ack_tbl_; // <radio_id, p_rx_create_raw_ack_>.
   Tun tun_;
   int ack_time_out_;  /** in ms. */
@@ -94,6 +96,7 @@ class WspaceClient {
 
 // Wrapper function for pthread_create
 void* LaunchRxRcvAth(void* arg);
+void* LaunchRxRcvCell(void* arg);
 void* LaunchRxWriteTun(void* arg);
 void* LaunchRxCreateDataAck(void* arg);
 void* LaunchRxCreateRawAck(void* arg);
