@@ -418,7 +418,6 @@ void* WspaceClient::RxRcvCell(void* arg) {
     }
     if (radio_id != -1) {
       hdr->ParseHeader(&batch_id_parse, &start_seq_parse, &coding_index_parse, &k, &n, &bs_id, &client_id);
-      radio_context_tbl_[radio_id]->set_bs_id(bs_id);
       seq_num = start_seq_parse + coding_index_parse;
       uint16 len = hdr->lens()[coding_index_parse];
       radio_context_tbl_[radio_id]->data_pkt_buf()->EnqueuePkt(seq_num, len, (char*)hdr->GetPayloadStart());
