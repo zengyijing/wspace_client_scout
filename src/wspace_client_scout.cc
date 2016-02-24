@@ -219,7 +219,7 @@ void* WspaceClient::RxRcvAth(void* arg) {
     coding_index_parse, k, n);
 #endif
     uint32 per_pkt_duration = (nread * 8.0) / (hdr->GetRate() / 10.0) + DIFS_80211ag + SLOT_TIME * 5;  /** in us.*/
-
+    radio_context_tbl_[*radio_id]->batch_info()->GetBatchID(&batch_id);
     if (batch_id > batch_id_parse) {  /** Out of batch order.*/
       /*
       if (type == Tun::kCellular) {
