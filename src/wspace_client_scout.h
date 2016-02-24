@@ -38,7 +38,7 @@ class RadioContext {
   pthread_t* p_rx_create_data_ack() { return &p_rx_create_data_ack_; }
   pthread_t* p_rx_create_raw_ack() { return &p_rx_create_raw_ack_; }
   int bs_id() { return bs_id_; }
-  //void set_bs_id(int bs_id);
+  void set_bs_id(int bs_id) { bs_id_ = bs_id; }
 
  private:
   int bs_id_;
@@ -47,7 +47,6 @@ class RadioContext {
   CodeInfo decoder_;
   BatchInfo batch_info_;
   pthread_t p_rx_rcv_ath_, p_rx_write_tun_, p_rx_create_data_ack_, p_rx_create_raw_ack_; 
-  pthread_mutex_t lock_;
 };
 
 class WspaceClient {
