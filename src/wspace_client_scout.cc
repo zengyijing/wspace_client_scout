@@ -219,7 +219,6 @@ void* WspaceClient::RxRcvAth(void* arg) {
     coding_index_parse, k, n);
 #endif
     uint32 per_pkt_duration = (nread * 8.0) / (hdr->GetRate() / 10.0) + DIFS_80211ag + SLOT_TIME * 5;  /** in us.*/
-    radio_context_tbl_[*radio_id]->batch_info()->GetBatchID(&batch_id);
     if (batch_id > batch_id_parse) {  /** Out of batch order.*/
       /*
       if (type == Tun::kCellular) {
@@ -385,25 +384,29 @@ void* WspaceClient::RxCreateRawAck(void* arg) {
 
 
 void* WspaceClient::RxRcvCell(void* arg) {
-  uint32 seq_num=0;
-  char *pkt = new char[PKT_SIZE];
-  uint16 nread=0;
-  uint32 batch_id=0, batch_id_parse=0, start_seq=0, start_seq_parse=0;
+  uint32 seq_num=0, batch_id=0, batch_id_parse=0, start_seq=0, start_seq_parse=0;
   int coding_index_parse=-1;
+  uint16 nread=0;
+  int bs_id = 0, client_id = 0;
+  int k = -1, n = -1;
+  char *pkt = new char[PKT_SIZE];
   printf("RxRcvCell start\n");
   while (1) {
     nread = tun_.Read(Tun::kCellular, pkt, PKT_SIZE, 0);
-    int k = -1, n = -1;
-    int bs_id = 0;
-    int client_id = 0;
-    // Get the header info
     AthCodeHeader *hdr = (AthCodeHeader*)pkt;
-    int radio_id = hdr->bs_id();  // Assume radio_id = bs_id for now.
     hdr->ParseHeader(&batch_id_parse, &start_seq_parse, &coding_index_parse, &k, &n, &bs_id, &client_id);
     assert(tun_.client_id_ == client_id);
-    seq_num = start_seq_parse + coding_index_parse;
-    uint16 len = hdr->lens()[coding_index_parse];
-    radio_context_tbl_[radio_id]->data_pkt_buf()->EnqueuePkt(seq_num, len, (char*)hdr->GetPayloadStart());
+    assert(coding_index_parse < k);
+    int radio_id = bs_id;
+    // Get the id of the current batch received from the whitespace interface.
+    radio_context_tbl_[radio_id]->batch_info()->GetBatchID(&batch_id);
+    // Only enqueue packets in a previous batch from cellular duplication. 
+    // This prevents occasional crush of the ACK handling logic at wspace_ap. 
+    if (batch_id > batch_id_parse) {
+	  seq_num = start_seq_parse + coding_index_parse;
+	  uint16 len = hdr->lens()[coding_index_parse];
+	  radio_context_tbl_[radio_id]->data_pkt_buf()->EnqueuePkt(seq_num, len, (char*)hdr->GetPayloadStart());
+    }
   }
   delete[] pkt;
 }
