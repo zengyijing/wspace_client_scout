@@ -59,19 +59,6 @@ void OriginalSeqContext::set_max_seq(uint32 seq) {
   UnLock();
 }
 
-int RadioContext::bs_id() {
-  Lock();
-  int bs_id = bs_id_;
-  UnLock();
-  return bs_id;
-}
-
-void RadioContext::set_bs_id(int bs_id) {
-  Lock();
-  bs_id_ = bs_id;
-  UnLock();
-}
-
 WspaceClient::WspaceClient(int argc, char *argv[], const char *optstring) 
     : min_pkt_cnt_(30) {
   int option;
@@ -119,19 +106,23 @@ WspaceClient::WspaceClient(int argc, char *argv[], const char *optstring)
         assert(min_pkt_cnt_ > 0);
         break;
       case 's': {
-        string addr;
+        string s;
         stringstream ss(optarg);
-        while(getline(ss, addr, ',')) {
-          if(atoi(addr.c_str()) == 1)
+        while(getline(ss, s, ',')) {
+          int bs_id = atoi(s.c_str());
+          if(bs_id == 1)
               Perror("id 1 is reserved by controller\n");
-          bs_ids_.push_back(atoi(addr.c_str()));
+          bs_ids_.push_back(bs_id);
+          int radio_id = bs_id;  // Assume radio_id = bs_id for now.
+          tun_.radio_ids_.push_back(radio_id);
+          radio_context_tbl_[radio_id] = new RadioContext(bs_id);
         }
         break;
       }
       case 'S': {
         ParseIP(bs_ids_, tun_.bs_ip_tbl_, tun_.bs_addr_tbl_);
         break;
-      }
+      } /*
       case 'r': {
         string radio;
         stringstream ss(optarg);
@@ -140,7 +131,7 @@ WspaceClient::WspaceClient(int argc, char *argv[], const char *optstring)
           radio_context_tbl_[atoi(radio.c_str())] = new RadioContext; // Insert RadioContext object to the table.
         }
         break;
-      }
+      } */
       default:
         Perror("Usage: %s -i tun0/tap0 -S server_eth_ip -s server_ath_ip -C client_eth_ip\n",argv[0]);
     }
@@ -221,7 +212,6 @@ void* WspaceClient::RxRcvAth(void* arg) {
     if (client_id != tun_.client_id_) { // This pkt is not for this client, move on.
       continue;
     }
-    radio_context_tbl_[*radio_id]->set_bs_id(bs_id);
     radio_context_tbl_[*radio_id]->raw_pkt_buf()->PushPkts(hdr->raw_seq(), true/**is good*/);
 #ifdef WRT_DEBUG
     printf("Receive from bs_id:%d via radio_id: %d raw_seq: %u batch_id: %u seq_num: %u start_seq: %u coding_index: %d k: %d n: %d\n", 
@@ -406,22 +396,14 @@ void* WspaceClient::RxRcvCell(void* arg) {
     int k = -1, n = -1;
     int bs_id = 0;
     int client_id = 0;
-    int radio_id = -1;
     // Get the header info
     AthCodeHeader *hdr = (AthCodeHeader*)pkt;
-    for(map<int, RadioContext*>::iterator it = radio_context_tbl_.begin(); it != radio_context_tbl_.end(); ++it) {
-      bs_id = it->second->bs_id();
-      if(bs_id == hdr->bs_id()) {
-        radio_id = it->first;
-        break;
-      }
-    }
-    if (radio_id != -1) {
-      hdr->ParseHeader(&batch_id_parse, &start_seq_parse, &coding_index_parse, &k, &n, &bs_id, &client_id);
-      seq_num = start_seq_parse + coding_index_parse;
-      uint16 len = hdr->lens()[coding_index_parse];
-      radio_context_tbl_[radio_id]->data_pkt_buf()->EnqueuePkt(seq_num, len, (char*)hdr->GetPayloadStart());
-    }
+    int radio_id = hdr->bs_id();  // Assume radio_id = bs_id for now.
+    hdr->ParseHeader(&batch_id_parse, &start_seq_parse, &coding_index_parse, &k, &n, &bs_id, &client_id);
+    assert(tun_.client_id_ == client_id);
+    seq_num = start_seq_parse + coding_index_parse;
+    uint16 len = hdr->lens()[coding_index_parse];
+    radio_context_tbl_[radio_id]->data_pkt_buf()->EnqueuePkt(seq_num, len, (char*)hdr->GetPayloadStart());
   }
   delete[] pkt;
 }

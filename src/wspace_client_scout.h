@@ -26,8 +26,8 @@ class OriginalSeqContext {
 
 class RadioContext {
  public:
-  RadioContext(): decoder_(CodeInfo::kDecoder, MAX_BATCH_SIZE, PKT_SIZE), bs_id_(0) { Pthread_mutex_init(&lock_, NULL); }
-  ~RadioContext() { Pthread_mutex_destroy(&lock_); }
+  RadioContext(int bs_id): decoder_(CodeInfo::kDecoder, MAX_BATCH_SIZE, PKT_SIZE), bs_id_(bs_id) {}
+  ~RadioContext() {}
 
   RxRawBuf* raw_pkt_buf() { return &raw_pkt_buf_; }
   RxDataBuf* data_pkt_buf() { return &data_pkt_buf_; }
@@ -37,13 +37,10 @@ class RadioContext {
   pthread_t* p_rx_write_tun() { return &p_rx_write_tun_; }
   pthread_t* p_rx_create_data_ack() { return &p_rx_create_data_ack_; }
   pthread_t* p_rx_create_raw_ack() { return &p_rx_create_raw_ack_; }
-  int bs_id();
-  void set_bs_id(int bs_id);
+  int bs_id() { return bs_id_; }
+  //void set_bs_id(int bs_id);
 
  private:
-  void Lock() { Pthread_mutex_lock(&lock_); }
-  void UnLock() { Pthread_mutex_unlock(&lock_); }
-
   int bs_id_;
   RxRawBuf raw_pkt_buf_;
   RxDataBuf data_pkt_buf_;
