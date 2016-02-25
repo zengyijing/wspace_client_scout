@@ -8,8 +8,6 @@
 #include "fec.h"
 #include "gps_parser.h"
 
-#define PKT_QUEUE_SIZE 500
-
 class OriginalSeqContext {
  public:
   OriginalSeqContext(): max_seq_(0) { Pthread_mutex_init(&lock_, NULL); }
@@ -29,12 +27,11 @@ class OriginalSeqContext {
 class RadioContext {
  public:
   RadioContext(int bs_id): decoder_(CodeInfo::kDecoder, MAX_BATCH_SIZE, PKT_SIZE),
-                           bs_id_(bs_id), cellular_pkt_buf_(PKT_QUEUE_SIZE) {}
+                           bs_id_(bs_id) {}
   ~RadioContext() {}
 
   RxRawBuf* raw_pkt_buf() { return &raw_pkt_buf_; }
   RxDataBuf* data_pkt_buf() { return &data_pkt_buf_; }
-  PktQueue* cellular_pkt_buf() { return &cellular_pkt_buf_; }
   BatchInfo* batch_info() { return &batch_info_; }
   CodeInfo* decoder() { return &decoder_; }
 
@@ -49,7 +46,6 @@ class RadioContext {
   int bs_id_;
   RxRawBuf  raw_pkt_buf_;
   RxDataBuf data_pkt_buf_;
-  PktQueue  cellular_pkt_buf_; 
   CodeInfo  decoder_;
   BatchInfo batch_info_;
   pthread_t p_rx_rcv_ath_, p_rx_write_tun_, p_rx_create_data_ack_, p_rx_create_raw_ack_; 
