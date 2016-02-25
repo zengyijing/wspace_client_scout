@@ -26,13 +26,15 @@ class OriginalSeqContext {
 
 class RadioContext {
  public:
-  RadioContext(int bs_id): decoder_(CodeInfo::kDecoder, MAX_BATCH_SIZE, PKT_SIZE), bs_id_(bs_id) {}
+  RadioContext(int bs_id): decoder_(CodeInfo::kDecoder, MAX_BATCH_SIZE, PKT_SIZE),
+                           bs_id_(bs_id) {}
   ~RadioContext() {}
 
   RxRawBuf* raw_pkt_buf() { return &raw_pkt_buf_; }
   RxDataBuf* data_pkt_buf() { return &data_pkt_buf_; }
   BatchInfo* batch_info() { return &batch_info_; }
   CodeInfo* decoder() { return &decoder_; }
+
   pthread_t* p_rx_rcv_ath() { return &p_rx_rcv_ath_; }
   pthread_t* p_rx_write_tun() { return &p_rx_write_tun_; }
   pthread_t* p_rx_create_data_ack() { return &p_rx_create_data_ack_; }
@@ -42,11 +44,28 @@ class RadioContext {
 
  private:
   int bs_id_;
-  RxRawBuf raw_pkt_buf_;
+  RxRawBuf  raw_pkt_buf_;
   RxDataBuf data_pkt_buf_;
-  CodeInfo decoder_;
+  CodeInfo  decoder_;
   BatchInfo batch_info_;
   pthread_t p_rx_rcv_ath_, p_rx_write_tun_, p_rx_create_data_ack_, p_rx_create_raw_ack_; 
+};
+
+// Store information about the current base station serving this client.
+class BaseStationContext {
+ public:
+  BaseStationContext(): bs_id_(-1) { Pthread_mutex_init(&lock_, NULL); }
+  ~BaseStationContext() { Pthread_mutex_destroy(&lock_); }
+  
+  int bs_id();
+  void set_bs_id(int bs_id);
+  
+ private:
+  void Lock() { Pthread_mutex_lock(&lock_); }
+  void UnLock() { Pthread_mutex_unlock(&lock_); }
+
+  int bs_id_;
+  pthread_mutex_t lock_;
 };
 
 class WspaceClient {
@@ -82,6 +101,9 @@ class WspaceClient {
   vector<int> bs_ids_;
   OriginalSeqContext original_seq_context_;
   map<int, RadioContext*> radio_context_tbl_;
+  BaseStationContext bs_context_;
+  string f_gps_;
+
  private:
   /**
    * Receive packets from the base station, from the front laptop, 

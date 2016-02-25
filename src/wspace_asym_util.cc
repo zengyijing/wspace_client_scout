@@ -505,7 +505,8 @@ void AthCodeHeader::ParseHeader(uint32 *batch_id, uint32 *start_seq, int *ind,
 }
 
 /** GPS Header.*/
-void GPSHeader::Init(double time, double latitude, double longitude, double speed, int client_id) {
+void GPSHeader::Init(double time, double latitude, double longitude,
+                     double speed, int client_id, int bs_id) {
   assert(speed >= 0);
   seq_++;
   type_ = GPS;
@@ -514,6 +515,7 @@ void GPSHeader::Init(double time, double latitude, double longitude, double spee
   longitude_ = longitude;
   speed_ = speed;
   client_id_ = client_id;
+  bs_id_ = bs_id;
 }
 
 /** GPSLogger.*/
@@ -540,7 +542,8 @@ void GPSLogger::ConfigFile(const char* filename) {
 void GPSLogger::LogGPSInfo(const GPSHeader &hdr) {
   if (fp_ == stdout)
     fprintf(fp_, "GPS pkt: ");
-  fprintf(fp_, "%d\t%.0f\t%.6f\t%.6f\t%.3f\n", hdr.seq_, hdr.time_, hdr.latitude_, hdr.longitude_, hdr.speed_, hdr.client_id_);
+  fprintf(fp_, "%d %.0f %.6f %.6f %.3f %d %d\n", hdr.seq_, hdr.time_, hdr.latitude_, hdr.longitude_, 
+                                                 hdr.speed_, hdr.client_id_, hdr.bs_id_);
   fflush(fp_);
 }
 
@@ -724,4 +727,3 @@ bool BatchInfo::IsTimeOut() {
   //printf("end_time - cur_recv_time_[%g] time_left[%g]\n", end_time - cur_recv_time_, time_left_ + kExtraWaitTime);
   return is_timeout;
 }
-

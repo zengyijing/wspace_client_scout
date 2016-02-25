@@ -592,10 +592,11 @@ class AckHeader {
 
 class GPSHeader {
  public:
-  GPSHeader() : type_(GPS), seq_(0), speed_(-1.0) {}
+  GPSHeader() : type_(GPS), seq_(0), speed_(-1.0), client_id_(0), bs_id_(0) {}
   ~GPSHeader() {}
 
-  void Init(double time, double latitude, double longitude, double speed, int client_id);
+  void Init(double time, double latitude, double longitude,
+            double speed, int client_id, int bs_id);
 
   uint32 seq() const { assert(seq_ > 0); return seq_; }
   int client_id() const { return client_id_; }
@@ -611,6 +612,7 @@ class GPSHeader {
   double longitude_;
   double speed_;
   int client_id_;
+  int bs_id_;
 };
 
 class GPSLogger {
