@@ -256,7 +256,6 @@ void* WspaceClient::RxRcvAth(void* arg) {
         continue;  /** Not a useful packet. Could be due to two antenna combining*/
       }
     }
-
     assert(radio_context_tbl_[*radio_id]->decoder()->PushPkt(nread - hdr->GetFullHdrLen(), hdr->GetPayloadStart(), coding_index_parse));
 //    printf("Push encoding pkt cnt[%d] start_seq[%u] coding_index[%d] raw_seq[%u]\n", 
 //      radio_context_tbl_[*radio_id]->decoder()->coding_pkt_cnt(), start_seq_parse, coding_index_parse, hdr->raw_seq());
@@ -266,10 +265,8 @@ void* WspaceClient::RxRcvAth(void* arg) {
      */
     if (coding_index_parse < k) {  
       seq_num = start_seq_parse + coding_index_parse;
-#ifdef WRT_DEBUG
-      printf("Wspace Enqueue: Early enqueue pkt batch_id: %u seq_num: %u start_seq: %u index: %d len: %d\n", 
-        batch_id, seq_num, start_seq_parse, coding_index_parse, radio_context_tbl_[*radio_id]->decoder()->GetLen(coding_index_parse));
-#endif
+      printf("Wspace Enqueue: Early enqueue pkt_type: %d batch_id: %u seq_num: %u start_seq: %u index: %d len: %d\n", 
+        hdr->GetPayloadStart()[0], batch_id, seq_num, start_seq_parse, coding_index_parse, radio_context_tbl_[*radio_id]->decoder()->GetLen(coding_index_parse));
       radio_context_tbl_[*radio_id]->data_pkt_buf()->EnqueuePkt(seq_num, radio_context_tbl_[*radio_id]->decoder()->GetLen(coding_index_parse), (char*)hdr->GetPayloadStart());
       early_decoding_inds[early_decoding_cnt] = coding_index_parse;
 
@@ -285,7 +282,7 @@ void* WspaceClient::RxRcvAth(void* arg) {
             uint16 native_pkt_len=-1;
             seq_num = start_seq_parse + i;
             assert(radio_context_tbl_[*radio_id]->decoder()->PopPkt((uint8**)&buf_addr, &native_pkt_len));
-            printf("Wspace Enqueue: decode pkt batch_id: %u seq_num: %u len: %d\n", batch_id, seq_num, native_pkt_len);
+            printf("Wspace Enqueue: Late enqueue pkt_type: %d batch_id: %u seq_num: %u len: %d\n", hdr->GetPayloadStart()[0], batch_id, seq_num, native_pkt_len);
             radio_context_tbl_[*radio_id]->data_pkt_buf()->EnqueuePkt(seq_num, native_pkt_len, buf_addr);
           } else {	
             radio_context_tbl_[*radio_id]->decoder()->MoveToNextPkt();
@@ -394,21 +391,20 @@ void* WspaceClient::RxRcvCell(void* arg) {
   printf("RxRcvCell start\n");
   while (1) {
     nread = tun_.Read(Tun::kCellular, pkt, PKT_SIZE, 0);
-    if(pkt[0] == ATH_CODE) {
-      AthCodeHeader *hdr = (AthCodeHeader*)pkt;
-      hdr->ParseHeader(&batch_id_parse, &start_seq_parse, &coding_index_parse, &k, &n, &bs_id, &client_id);
-      assert(tun_.client_id_ == client_id);
-      assert(coding_index_parse < k);
-      int radio_id = bs_id;
-      printf("Receive from bs_id:%d via cellular raw_seq: %u batch_id: %u seq_num: %u start_seq: %u coding_index: %d k: %d n: %d\n", 
-        bs_id, hdr->raw_seq(), batch_id_parse, start_seq_parse + coding_index_parse, start_seq_parse, 
-        coding_index_parse, k, n);
-      seq_num = start_seq_parse + coding_index_parse;
-      uint16 len = hdr->lens()[coding_index_parse];
-      radio_context_tbl_[radio_id]->data_pkt_buf()->EnqueuePkt(seq_num, len, (char*)hdr->GetPayloadStart());
-    } else {
-      printf("Receive unwanted pkt type:%d, nread:%d\n", (int)pkt[0], nread);
+    if(pkt[0] != ATH_CODE) {
+      printf("RxRcvCell: Invalid pkt type: %d, len: %d\n", pkt[0], nread);
+      continue;
     }
+	AthCodeHeader *hdr = (AthCodeHeader*)pkt;
+	hdr->ParseHeader(&batch_id_parse, &start_seq_parse, &coding_index_parse, &k, &n, &bs_id, &client_id);
+	assert(tun_.client_id_ == client_id);
+	assert(coding_index_parse < k);
+	int radio_id = bs_id;
+	seq_num = start_seq_parse + coding_index_parse;
+	uint16 len = hdr->lens()[coding_index_parse];
+	printf("Cellular duplicate bs_id:%d raw_seq: %u batch_id: %u seq_num: %u start_seq: %u coding_index: %d k: %d n: %d len: %u\n", 
+	  bs_id, hdr->raw_seq(), batch_id_parse, seq_num, start_seq_parse, coding_index_parse, k, n, len);
+	radio_context_tbl_[radio_id]->data_pkt_buf()->EnqueuePkt(seq_num, len, (char*)hdr->GetPayloadStart());
   }
   delete[] pkt;
 }
