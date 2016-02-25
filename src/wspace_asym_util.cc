@@ -494,6 +494,11 @@ void AthCodeHeader::SetHeader(uint32 batch_id, uint32 start_seq, char type, int 
 
 void AthCodeHeader::ParseHeader(uint32 *batch_id, uint32 *start_seq, int *ind,
                                 int *k, int *n, int *bs_id, int *client_id) const {
+  if(type_ != ATH_CODE)
+    printf("type:%d\n", type_);
+  if(!(batch_id_ > 0 && start_seq_ > 0 && ind_ < n_ && k_ <= n_ && k_ > 0 && k_ <= MAX_BATCH_SIZE))
+    printf("batch_id_:%d, start_seq_:%d, ind_:%d, n_:%d, k_:%d, MAX_BATCH_SIZE:%d\n", batch_id_, start_seq_, ind_, n_, k_, MAX_BATCH_SIZE);
+  assert(type_ == ATH_CODE);
   assert(batch_id_ > 0 && start_seq_ > 0 && ind_ < n_ && k_ <= n_ && k_ > 0 && k_ <= MAX_BATCH_SIZE);
   *batch_id = batch_id_;
   *start_seq = start_seq_;

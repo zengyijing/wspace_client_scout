@@ -119,7 +119,10 @@ uint16_t Tun::Read(const IOType &type, char *buf, uint16_t len, int radio_id) {
     nread = recvfrom(sock_fd_ath_tbl_[radio_id], buf, len, 0, NULL, NULL);
   }
   else if (type == kCellular) {
-    nread = recvfrom(sock_fd_eth_, buf, len, 0, NULL, NULL);
+    struct sockaddr_in Addr;
+    socklen_t addrlen = sizeof(Addr);
+    nread = recvfrom(sock_fd_eth_, buf, len, 0, (struct sockaddr*)&Addr, &addrlen);
+    printf("receive cellular from %s\n", inet_ntoa(Addr.sin_addr));
   }
   else
     assert(0); 
