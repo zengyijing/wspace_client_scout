@@ -9,6 +9,7 @@
 #include <time.h>
 
 #include <deque>
+#include <queue>
 #include <vector>
 #include <string>
 
@@ -592,10 +593,11 @@ class AckHeader {
 
 class GPSHeader {
  public:
-  GPSHeader() : type_(GPS), seq_(0), speed_(-1.0) {}
+  GPSHeader() : type_(GPS), seq_(0), speed_(-1.0), client_id_(0), bs_id_(0) {}
   ~GPSHeader() {}
 
-  void Init(double time, double latitude, double longitude, double speed, int client_id);
+  void Init(double time, double latitude, double longitude,
+            double speed, int client_id, int bs_id);
 
   uint32 seq() const { assert(seq_ > 0); return seq_; }
   int client_id() const { return client_id_; }
@@ -611,6 +613,7 @@ class GPSHeader {
   double longitude_;
   double speed_;
   int client_id_;
+  int bs_id_;
 };
 
 class GPSLogger {
@@ -760,6 +763,35 @@ class RxRawBuf {
   uint32 pkt_cnt_;          /** Number of raw packets which have been curently logged. */
   pthread_mutex_t lock_;    /** Lock is needed because the bit map is access by two threads. */
   pthread_cond_t fill_cond_;  /** There are raw acks filled in. */
+};
+
+class PktQueue {
+ public:
+  PktQueue() : kMaxSize(0) {}
+  PktQueue(size_t max_size);
+  ~PktQueue();
+
+  bool Enqueue(const char *pkt, uint16_t len);
+  // Note: The caller needs to deallocate buf.
+  void Dequeue(char **buf, uint16_t *len);
+  // With lock. Return the size of the top packet in bytes.
+  // Return 0 if the queue is empty.
+  uint16_t PeekTopPktSize();
+  int GetLength() { return q_.size(); }
+  void Clear();
+
+ private:
+  bool IsFull() { return q_.size() == kMaxSize; }
+  bool IsEmpty() { return q_.empty(); }
+  void Lock() { Pthread_mutex_lock(&lock_); }
+  void UnLock() { Pthread_mutex_unlock(&lock_); }
+  void WaitEmpty() { Pthread_cond_wait(&empty_cond_, &lock_); }
+  void SignalEmpty() { Pthread_cond_signal(&empty_cond_); }
+
+  size_t kMaxSize;
+  queue<pair<char*, uint16_t> > q_;  // <Packet buffer address, length>.
+  pthread_mutex_t lock_;
+  pthread_cond_t empty_cond_;
 };
 
 void PrintPkt(char *pkt, uint16 len);

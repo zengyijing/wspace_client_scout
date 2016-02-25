@@ -505,7 +505,8 @@ void AthCodeHeader::ParseHeader(uint32 *batch_id, uint32 *start_seq, int *ind,
 }
 
 /** GPS Header.*/
-void GPSHeader::Init(double time, double latitude, double longitude, double speed, int client_id) {
+void GPSHeader::Init(double time, double latitude, double longitude,
+                     double speed, int client_id, int bs_id) {
   assert(speed >= 0);
   seq_++;
   type_ = GPS;
@@ -514,6 +515,7 @@ void GPSHeader::Init(double time, double latitude, double longitude, double spee
   longitude_ = longitude;
   speed_ = speed;
   client_id_ = client_id;
+  bs_id_ = bs_id;
 }
 
 /** GPSLogger.*/
@@ -540,7 +542,8 @@ void GPSLogger::ConfigFile(const char* filename) {
 void GPSLogger::LogGPSInfo(const GPSHeader &hdr) {
   if (fp_ == stdout)
     fprintf(fp_, "GPS pkt: ");
-  fprintf(fp_, "%d\t%.0f\t%.6f\t%.6f\t%.3f\n", hdr.seq_, hdr.time_, hdr.latitude_, hdr.longitude_, hdr.speed_, hdr.client_id_);
+  fprintf(fp_, "%d %.0f %.6f %.6f %.3f %d %d\n", hdr.seq_, hdr.time_, hdr.latitude_, hdr.longitude_, 
+                                                 hdr.speed_, hdr.client_id_, hdr.bs_id_);
   fflush(fp_);
 }
 
@@ -725,3 +728,65 @@ bool BatchInfo::IsTimeOut() {
   return is_timeout;
 }
 
+PktQueue::PktQueue(size_t max_size) : kMaxSize(max_size) {
+  Pthread_mutex_init(&lock_, NULL);
+  Pthread_cond_init(&empty_cond_, NULL);
+}
+
+PktQueue::~PktQueue() {
+  Lock();
+  while (!q_.empty()) {
+    delete[] q_.front().first;
+    q_.pop();
+  }
+  UnLock();
+  Pthread_mutex_destroy(&lock_);
+  Pthread_cond_destroy(&empty_cond_);
+}
+
+void PktQueue::Clear() {
+  Lock();
+  while (!q_.empty()) {
+    delete[] q_.front().first;
+    q_.pop();
+  }
+  UnLock();
+}
+
+bool PktQueue::Enqueue(const char *pkt, uint16_t len) {
+  if (len <= 0) {
+    perror("PktQueue::Enqueue invalid len\n");
+    exit(0);
+  }
+  Lock();
+  if (IsFull()) {
+    UnLock();
+    return false;
+  } else {
+    char *buf = new char[len];
+    memcpy(buf, pkt, len);
+    q_.push(make_pair(buf, len));
+    UnLock();
+    return true;
+  }
+}
+
+void PktQueue::Dequeue(char **buf, uint16_t *len) {
+  Lock();
+  assert(!IsEmpty());
+  *buf  = q_.front().first;
+  *len = q_.front().second; 
+  q_.pop();
+  SignalEmpty();
+  UnLock();
+}
+
+uint16_t PktQueue::PeekTopPktSize() {
+  uint16_t len = 0;
+  Lock();
+  if (!IsEmpty()) {
+    len = q_.front().second;
+  }
+  UnLock();
+  return len;
+}
