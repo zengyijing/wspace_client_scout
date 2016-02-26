@@ -207,17 +207,17 @@ void* WspaceClient::RxRcvAth(void* arg) {
       continue;
     }
 #endif
-    printf("receive whitespace pkt, nread:%d\n", nread);
+    //printf("receive whitespace pkt, nread:%d\n", nread);
     hdr->ParseHeader(&batch_id_parse, &start_seq_parse, &coding_index_parse, &k, &n, &bs_id, &client_id);
     if (client_id != tun_.client_id_) { // This pkt is not for this client, move on.
       continue;
     }
     radio_context_tbl_[*radio_id]->raw_pkt_buf()->PushPkts(hdr->raw_seq(), true/**is good*/);
-//#ifdef WRT_DEBUG
+#ifdef WRT_DEBUG
     printf("Receive from bs_id:%d via radio_id: %d raw_seq: %u batch_id: %u seq_num: %u start_seq: %u coding_index: %d k: %d n: %d\n", 
       bs_id, *radio_id, hdr->raw_seq(), batch_id_parse, start_seq_parse + coding_index_parse, start_seq_parse, 
     coding_index_parse, k, n);
-//#endif
+#endif
     uint32 per_pkt_duration = (nread * 8.0) / (hdr->GetRate() / 10.0) + DIFS_80211ag + SLOT_TIME * 5;  /** in us.*/
     if (batch_id > batch_id_parse) {  /** Out of batch order.*/
       /*
@@ -339,12 +339,12 @@ void* WspaceClient::RxCreateDataAck(void* arg) {
     ack_pkt->set_end_seq(end_seq);
     bs_id = radio_context_tbl_[*radio_id]->bs_id();
     ack_pkt->set_ids(tun_.client_id_, bs_id);
-    printf("Send Data Ack to bs_id:%d\n", bs_id);
+    //printf("Send Data Ack to bs_id:%d\n", bs_id);
     //tun_.Write(Tun::kCellular, (char*)ack_pkt, ack_pkt->GetLen(), bs_id);
     tun_.Write(Tun::kController, (char*)ack_pkt, ack_pkt->GetLen(), 0);
-//#ifdef WRT_DEBUG
+#ifdef WRT_DEBUG
     ack_pkt->Print();
-//#endif
+#endif
   }
   delete ack_pkt;
 }
@@ -375,7 +375,7 @@ void* WspaceClient::RxCreateRawAck(void* arg) {
     ack_pkt->set_ids(tun_.client_id_, bs_id);
     //tun_.Write(Tun::kCellular, (char*)ack_pkt, ack_pkt->GetLen(), bs_id);
     tun_.Write(Tun::kController, (char*)ack_pkt, ack_pkt->GetLen(), 0);
-    //ack_pkt->Print();
+    ack_pkt->Print();
   }
   delete ack_pkt;
 };
@@ -402,8 +402,7 @@ void* WspaceClient::RxRcvCell(void* arg) {
 	int radio_id = bs_id;
 	seq_num = start_seq_parse + coding_index_parse;
 	uint16 len = hdr->lens()[coding_index_parse];
-	printf("Cellular duplicate bs_id:%d raw_seq: %u batch_id: %u seq_num: %u start_seq: %u coding_index: %d k: %d n: %d len: %u\n", 
-	  bs_id, hdr->raw_seq(), batch_id_parse, seq_num, start_seq_parse, coding_index_parse, k, n, len);
+	printf("Cellular duplicate bs_id:%d pkt_type: %d raw_seq: %u batch_id: %u seq_num: %u start_seq: %u coding_index: %d k: %d n: %d len: %u\n", bs_id, (char*)hdr->GetPayloadStart()[0], hdr->raw_seq(), batch_id_parse, seq_num, start_seq_parse, coding_index_parse, k, n, len);
 	radio_context_tbl_[radio_id]->data_pkt_buf()->EnqueuePkt(seq_num, len, (char*)hdr->GetPayloadStart());
   }
   delete[] pkt;
