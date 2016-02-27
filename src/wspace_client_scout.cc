@@ -18,7 +18,8 @@ int main(int argc, char **argv) {
 
 
   Pthread_create(&wspace_client->p_rx_send_cell_, NULL, LaunchRxSendCell, NULL);
-  //Pthread_create(&wspace_client->p_rx_parse_gps_, NULL, LaunchRxParseGPS, NULL);
+  Pthread_create(&wspace_client->p_rx_rcv_cell_, NULL, LaunchRxRcvCell, NULL);
+  Pthread_create(&wspace_client->p_rx_parse_gps_, NULL, LaunchRxParseGPS, NULL);
 
   for (vector<int>::iterator it = wspace_client->tun_.radio_ids_.begin(); it != wspace_client->tun_.radio_ids_.end(); ++it) {
     Pthread_create(wspace_client->radio_context_tbl_[*it]->p_rx_rcv_ath(), NULL, LaunchRxRcvAth, &(*it));
@@ -28,7 +29,9 @@ int main(int argc, char **argv) {
   }
 
   Pthread_join(wspace_client->p_rx_send_cell_, NULL);
-  //Pthread_join(wspace_client->p_rx_parse_gps_, NULL);
+  Pthread_join(wspace_client->p_rx_rcv_cell_, NULL);
+  Pthread_join(wspace_client->p_rx_parse_gps_, NULL);
+
   for (vector<int>::iterator it = wspace_client->tun_.radio_ids_.begin(); it != wspace_client->tun_.radio_ids_.end(); ++it) {
     Pthread_join(*(wspace_client->radio_context_tbl_[*it]->p_rx_rcv_ath()), NULL);
     Pthread_join(*(wspace_client->radio_context_tbl_[*it]->p_rx_write_tun()), NULL);
@@ -58,9 +61,8 @@ void OriginalSeqContext::set_max_seq(uint32 seq) {
 }
 
 WspaceClient::WspaceClient(int argc, char *argv[], const char *optstring) 
-    : min_pkt_cnt_(30) {
+    : min_pkt_cnt_(30), f_gps_("") {
   int option;
-  double speed = -1.0;
   while ((option = getopt(argc, argv, optstring)) > 0) {
     switch(option) {
       case 'T':
@@ -93,10 +95,8 @@ WspaceClient::WspaceClient(int argc, char *argv[], const char *optstring)
         printf("Max ACK CNT: %u\n", max_ack_cnt_);
         break;
       case 'p':
-        speed = atof(optarg);
-        if (speed >= 0) gps_parser_.ConfigSpeed(true, speed);  /** Fixed speed for cart experiment. */
-        else gps_parser_.ConfigSpeed(false);  /** Get readings from the gps device.*/
-        printf("Speed is_fixed[%d] speed[%.3f]\n", (int)gps_parser_.is_fixed_speed(), gps_parser_.speed());
+        gps_parser_.ConfigSpeed(false);  /** Get readings from the gps device.*/
+        f_gps_ = string(optarg);
         break; 
       case 'n':
         min_pkt_cnt_ = atoi(optarg);
@@ -104,19 +104,23 @@ WspaceClient::WspaceClient(int argc, char *argv[], const char *optstring)
         assert(min_pkt_cnt_ > 0);
         break;
       case 's': {
-        string addr;
+        string s;
         stringstream ss(optarg);
-        while(getline(ss, addr, ',')) {
-          if(atoi(addr.c_str()) == 1)
+        while(getline(ss, s, ',')) {
+          int bs_id = atoi(s.c_str());
+          if(bs_id == 1)
               Perror("id 1 is reserved by controller\n");
-          bs_ids_.push_back(atoi(addr.c_str()));
+          bs_ids_.push_back(bs_id);
+          int radio_id = bs_id;  // Assume radio_id = bs_id for now.
+          tun_.radio_ids_.push_back(radio_id);
+          radio_context_tbl_[radio_id] = new RadioContext(bs_id);
         }
         break;
       }
       case 'S': {
         ParseIP(bs_ids_, tun_.bs_ip_tbl_, tun_.bs_addr_tbl_);
         break;
-      }
+      } /*
       case 'r': {
         string radio;
         stringstream ss(optarg);
@@ -125,7 +129,7 @@ WspaceClient::WspaceClient(int argc, char *argv[], const char *optstring)
           radio_context_tbl_[atoi(radio.c_str())] = new RadioContext; // Insert RadioContext object to the table.
         }
         break;
-      }
+      } */
       default:
         Perror("Usage: %s -i tun0/tap0 -S server_eth_ip -s server_ath_ip -C client_eth_ip\n",argv[0]);
     }
@@ -206,14 +210,15 @@ void* WspaceClient::RxRcvAth(void* arg) {
     if (client_id != tun_.client_id_) { // This pkt is not for this client, move on.
       continue;
     }
-    radio_context_tbl_[*radio_id]->raw_pkt_buf()->PushPkts(hdr->raw_seq(), true/**is good*/, bs_id);
+    assert(*radio_id == bs_id);
+    radio_context_tbl_[*radio_id]->raw_pkt_buf()->PushPkts(hdr->raw_seq(), true/**is good*/);
+    bs_context_.set_bs_id(bs_id);  // Record the base station that currently serves this client.
 #ifdef WRT_DEBUG
     printf("Receive from bs_id:%d via radio_id: %d raw_seq: %u batch_id: %u seq_num: %u start_seq: %u coding_index: %d k: %d n: %d\n", 
       bs_id, *radio_id, hdr->raw_seq(), batch_id_parse, start_seq_parse + coding_index_parse, start_seq_parse, 
     coding_index_parse, k, n);
 #endif
     uint32 per_pkt_duration = (nread * 8.0) / (hdr->GetRate() / 10.0) + DIFS_80211ag + SLOT_TIME * 5;  /** in us.*/
-
     if (batch_id > batch_id_parse) {  /** Out of batch order.*/
       /*
       if (type == Tun::kCellular) {
@@ -240,7 +245,7 @@ void* WspaceClient::RxRcvAth(void* arg) {
       radio_context_tbl_[*radio_id]->decoder()->CopyLens(hdr->lens());
       /** Prevent the start seq to be set to a smaller value due ot retransission.*/
       start_seq = (start_seq_parse > start_seq) ? start_seq_parse : start_seq;  
-      radio_context_tbl_[*radio_id]->batch_info()->SetBatchInfo(batch_id_parse, start_seq-1, decoding_done, coding_index_parse, n, per_pkt_duration, bs_id);
+      radio_context_tbl_[*radio_id]->batch_info()->SetBatchInfo(batch_id_parse, start_seq-1, decoding_done, coding_index_parse, n, per_pkt_duration);
       start.GetCurrTime();
     }
     else {  /** Handling the current batch. */
@@ -334,7 +339,7 @@ void* WspaceClient::RxCreateDataAck(void* arg) {
     for (vector<uint32>::iterator it = nack_seq_arr.begin(); it != nack_seq_arr.end(); it++)
       ack_pkt->PushNack(*it);
     ack_pkt->set_end_seq(end_seq);
-    radio_context_tbl_[*radio_id]->batch_info()->GetBSId(&bs_id);
+    bs_id = radio_context_tbl_[*radio_id]->bs_id();
     ack_pkt->set_ids(tun_.client_id_, bs_id);
     //printf("Send Data Ack to bs_id:%d\n", bs_id);
     //tun_.Write(Tun::kCellular, (char*)ack_pkt, ack_pkt->GetLen(), bs_id);
@@ -359,7 +364,7 @@ void* WspaceClient::RxCreateRawAck(void* arg) {
   printf("RxCreateRawAck start, radio_id:%d\n", *radio_id);
   while (1) {
     ack_pkt->Init(ack_type);
-    radio_context_tbl_[*radio_id]->raw_pkt_buf()->PopPktStatus(nack_vec, &end_seq, &num_pkts, &bs_id, (uint32)min_pkt_cnt_);
+    radio_context_tbl_[*radio_id]->raw_pkt_buf()->PopPktStatus(nack_vec, &end_seq, &num_pkts, (uint32)min_pkt_cnt_);
     for (it = nack_vec.begin(); it != nack_vec.end(); it++) {
       ack_pkt->PushNack(*it);
       if (ack_pkt->IsFull()) {
@@ -368,14 +373,43 @@ void* WspaceClient::RxCreateRawAck(void* arg) {
     }
     ack_pkt->set_end_seq(end_seq);
     ack_pkt->set_num_pkts(num_pkts);
+    bs_id = radio_context_tbl_[*radio_id]->bs_id();
     ack_pkt->set_ids(tun_.client_id_, bs_id);
-    //printf("Send Raw Ack to bs_id:%d\n", bs_id);
     //tun_.Write(Tun::kCellular, (char*)ack_pkt, ack_pkt->GetLen(), bs_id);
     tun_.Write(Tun::kController, (char*)ack_pkt, ack_pkt->GetLen(), 0);
     //ack_pkt->Print();
   }
   delete ack_pkt;
 };
+
+
+void* WspaceClient::RxRcvCell(void* arg) {
+  uint32 seq_num=0, batch_id=0, batch_id_parse=0, start_seq=0, start_seq_parse=0;
+  int coding_index_parse=-1;
+  uint16 nread=0;
+  int bs_id = 0, client_id = 0;
+  int k = -1, n = -1;
+  char *pkt = new char[PKT_SIZE];
+  printf("RxRcvCell start\n");
+  while (1) {
+    nread = tun_.Read(Tun::kCellular, pkt, PKT_SIZE, 0);
+    AthCodeHeader *hdr = (AthCodeHeader*)pkt;
+    hdr->ParseHeader(&batch_id_parse, &start_seq_parse, &coding_index_parse, &k, &n, &bs_id, &client_id);
+    assert(tun_.client_id_ == client_id);
+    assert(coding_index_parse < k);
+    int radio_id = bs_id;
+    // Get the id of the current batch received from the whitespace interface.
+    radio_context_tbl_[radio_id]->batch_info()->GetBatchID(&batch_id);
+    // Only enqueue packets in a previous batch from cellular duplication. 
+    // This prevents occasional crush of the ACK handling logic at wspace_ap. 
+    if (batch_id > batch_id_parse) {
+	  seq_num = start_seq_parse + coding_index_parse;
+	  uint16 len = hdr->lens()[coding_index_parse];
+	  radio_context_tbl_[radio_id]->data_pkt_buf()->EnqueuePkt(seq_num, len, (char*)hdr->GetPayloadStart());
+    }
+  }
+  delete[] pkt;
+}
 
 void* WspaceClient::RxSendCell(void* arg) {
   uint16 nread=0;
@@ -391,19 +425,18 @@ void* WspaceClient::RxSendCell(void* arg) {
 }
 
 void* WspaceClient::RxParseGPS(void* arg) {
+  if (f_gps_ == "") return NULL;
   GPSHeader gps_hdr;
   GPSLogger gps_logger;
-  gps_logger.ConfigFile();
+  gps_logger.ConfigFile(f_gps_.c_str());
   while (true) {
     bool is_available = gps_parser_.GetGPSReadings();
     if (is_available) {
       gps_hdr.Init(gps_parser_.time(), gps_parser_.location().latitude, 
-          gps_parser_.location().longitude, gps_parser_.speed(), tun_.client_id_);
-      //for(vector<int>::iterator it = bs_ids_.begin(); it != bs_ids_.begin(); ++it) {
-      //  tun_.Write(Tun::kCellular, (char*)&gps_hdr, GPS_HEADER_SIZE, *it);
-      //}
-      tun_.Write(Tun::kController, (char*)&gps_hdr, GPS_HEADER_SIZE, 0);
-      //gps_logger.LogGPSInfo(gps_hdr);
+                   gps_parser_.location().longitude, gps_parser_.speed(), 
+                   tun_.client_id_, bs_context_.bs_id());
+      gps_logger.LogGPSInfo(gps_hdr);
+      //tun_.Write(Tun::kController, (char*)&gps_hdr, GPS_HEADER_SIZE, 0);
     }
   }
 }
@@ -419,6 +452,10 @@ void WspaceClient::RcvDownlinkPkt(char *pkt, uint16 *len, int radio_id) {
 
 void* LaunchRxRcvAth(void* arg) {
   wspace_client->RxRcvAth(arg);
+}
+
+void* LaunchRxRcvCell(void* arg) {
+  wspace_client->RxRcvCell(arg);
 }
 
 void* LaunchRxWriteTun(void* arg) {
@@ -439,4 +476,17 @@ void* LaunchRxSendCell(void* arg) {
 
 void* LaunchRxParseGPS(void* arg) {
   wspace_client->RxParseGPS(arg);
+}
+
+int BaseStationContext::bs_id() {
+  Lock();
+  int bs_id = bs_id_;
+  UnLock();
+  return bs_id;
+}
+
+void BaseStationContext::set_bs_id(int bs_id) {
+  Lock();
+  bs_id_ = bs_id;
+  UnLock();
 }
