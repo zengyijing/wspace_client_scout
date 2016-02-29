@@ -264,9 +264,9 @@ void* WspaceClient::RxRcvAth(void* arg) {
      * It benefits most under partial decoding failure.
      */
     if (coding_index_parse < k) {  
-      seq_num = start_seq_parse + coding_index_parse;
+      seq_num = start_seq_parse + coding_index_parse;/*
       printf("Wspace Enqueue: Early enqueue pkt_type: %d batch_id: %u seq_num: %u start_seq: %u index: %d len: %d\n", 
-        hdr->GetPayloadStart()[0], batch_id, seq_num, start_seq_parse, coding_index_parse, radio_context_tbl_[*radio_id]->decoder()->GetLen(coding_index_parse));
+        hdr->GetPayloadStart()[0], batch_id, seq_num, start_seq_parse, coding_index_parse, radio_context_tbl_[*radio_id]->decoder()->GetLen(coding_index_parse));*/
       radio_context_tbl_[*radio_id]->data_pkt_buf()->EnqueuePkt(seq_num, radio_context_tbl_[*radio_id]->decoder()->GetLen(coding_index_parse), (char*)hdr->GetPayloadStart());
       early_decoding_inds[early_decoding_cnt] = coding_index_parse;
 
@@ -282,7 +282,7 @@ void* WspaceClient::RxRcvAth(void* arg) {
             uint16 native_pkt_len=-1;
             seq_num = start_seq_parse + i;
             assert(radio_context_tbl_[*radio_id]->decoder()->PopPkt((uint8**)&buf_addr, &native_pkt_len));
-            printf("Wspace Enqueue: Late enqueue pkt_type: %d batch_id: %u seq_num: %u len: %d\n", hdr->GetPayloadStart()[0], batch_id, seq_num, native_pkt_len);
+            //printf("Wspace Enqueue: Late enqueue pkt_type: %d batch_id: %u seq_num: %u len: %d\n", hdr->GetPayloadStart()[0], batch_id, seq_num, native_pkt_len);
             radio_context_tbl_[*radio_id]->data_pkt_buf()->EnqueuePkt(seq_num, native_pkt_len, buf_addr);
           } else {	
             radio_context_tbl_[*radio_id]->decoder()->MoveToNextPkt();
@@ -395,15 +395,15 @@ void* WspaceClient::RxRcvCell(void* arg) {
       printf("RxRcvCell: Invalid pkt type: %d, len: %d\n", pkt[0], nread);
       continue;
     }
-	AthCodeHeader *hdr = (AthCodeHeader*)pkt;
-	hdr->ParseHeader(&batch_id_parse, &start_seq_parse, &coding_index_parse, &k, &n, &bs_id, &client_id);
-	assert(tun_.client_id_ == client_id);
-	assert(coding_index_parse < k);
-	int radio_id = bs_id;
-	seq_num = start_seq_parse + coding_index_parse;
-	uint16 len = hdr->lens()[coding_index_parse];
-	printf("Cellular duplicate bs_id:%d pkt_type: %d raw_seq: %u batch_id: %u seq_num: %u start_seq: %u coding_index: %d k: %d n: %d len: %u\n", bs_id, (char*)hdr->GetPayloadStart()[0], hdr->raw_seq(), batch_id_parse, seq_num, start_seq_parse, coding_index_parse, k, n, len);
-	radio_context_tbl_[radio_id]->data_pkt_buf()->EnqueuePkt(seq_num, len, (char*)hdr->GetPayloadStart());
+    AthCodeHeader *hdr = (AthCodeHeader*)pkt;
+    hdr->ParseHeader(&batch_id_parse, &start_seq_parse, &coding_index_parse, &k, &n, &bs_id, &client_id);
+    assert(tun_.client_id_ == client_id);
+    assert(coding_index_parse < k);
+    int radio_id = bs_id;
+    seq_num = start_seq_parse + coding_index_parse;
+    uint16 len = hdr->lens()[coding_index_parse];/*
+    printf("Cellular duplicate bs_id:%d pkt_type: %d raw_seq: %u batch_id: %u seq_num: %u start_seq: %u coding_index: %d k: %d n: %d len: %u\n", bs_id, (char*)hdr->GetPayloadStart()[0], hdr->raw_seq(), batch_id_parse, seq_num, start_seq_parse, coding_index_parse, k, n, len);*/
+    radio_context_tbl_[radio_id]->data_pkt_buf()->EnqueuePkt(seq_num, len, (char*)hdr->GetPayloadStart());
   }
   delete[] pkt;
 }
