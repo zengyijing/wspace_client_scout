@@ -375,7 +375,7 @@ void* WspaceClient::RxCreateRawAck(void* arg) {
     ack_pkt->set_ids(tun_.client_id_, bs_id);
     //tun_.Write(Tun::kCellular, (char*)ack_pkt, ack_pkt->GetLen(), bs_id);
     tun_.Write(Tun::kController, (char*)ack_pkt, ack_pkt->GetLen(), 0);
-    ack_pkt->Print();
+    //ack_pkt->Print();
   }
   delete ack_pkt;
 };

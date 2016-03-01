@@ -122,7 +122,7 @@ uint16_t Tun::Read(const IOType &type, char *buf, uint16_t len, int radio_id) {
     struct sockaddr_in Addr;
     socklen_t addrlen = sizeof(Addr);
     nread = recvfrom(sock_fd_eth_, buf, len, 0, (struct sockaddr*)&Addr, &addrlen);
-    printf("receive cellular from %s\n", inet_ntoa(Addr.sin_addr));
+    //printf("receive cellular from %s\n", inet_ntoa(Addr.sin_addr));
   }
   else
     assert(0); 
