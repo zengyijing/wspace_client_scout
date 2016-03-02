@@ -472,6 +472,8 @@ class AthHeader {
 
   void set_bs_id(int bs_id) { bs_id_ = bs_id; }
   int bs_id() { return bs_id_; }
+  void set_client_id(int client_id) { client_id_ = client_id; }
+  int client_id() { return client_id_; }
 // Data
   char type_;
   uint32 raw_seq_;
